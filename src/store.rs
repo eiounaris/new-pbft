@@ -4,7 +4,6 @@ use rocksdb::{DB, IteratorMode, Direction};
 use serde::{Serialize, Deserialize};
 use bincode;
 
-use std::error::Error;
 use std::convert::TryInto;
 
 /// 事务（fine）
@@ -42,7 +41,7 @@ pub struct RocksDBBlockStore {
 }
 
 impl RocksDBBlockStore {
-    pub fn new(path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(path: &str) -> Result<Self, String> {
         let db = DB::open_default(path)?;
         
         let last_block_index_key = b"last_block_index";
@@ -55,7 +54,7 @@ impl RocksDBBlockStore {
                 hash: "genesis".to_string(),
             };
             let mut batch = rocksdb::WriteBatch::default();
-            batch.put(genesis_block.index.to_le_bytes(), bincode::serialize(&genesis_block)?);
+            batch.put(genesis_block.index.to_le_bytes(), bincode::serialize(&genesis_block).map_err(|e| e.to_string())?);
             batch.put(last_block_index_key, genesis_block.index.to_le_bytes());
             db.write(batch)?;
         }

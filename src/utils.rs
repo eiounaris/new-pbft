@@ -1,10 +1,16 @@
+use crate::pbft::Pbft;
+use crate::state::State;
+
 use super::store::Transaction;
 
-use serde::Deserialize;
-use rsa::{pkcs1::{DecodeRsaPublicKey, EncodeRsaPublicKey, LineEnding}, RsaPublicKey};
-use std::time::{SystemTime, UNIX_EPOCH};
-use sha2::{Sha256, Digest};
 
+use reqwest::Client;
+use sha2::{Sha256, Digest};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::net::UdpSocket;
+use std::sync::Arc;
+use tokio::net::unix::SocketAddr;
+use tokio::sync::RwLock;
 /// 加载时间戳（s）
 pub fn get_current_timestamp() -> u64 {
     let start = SystemTime::now();
@@ -22,20 +28,7 @@ pub fn calculate_block_hash(index: u64, timestamp: u64, operations: &Vec<Transac
     format!("{:x}", hasher.finalize())
 }
 
-/// RsaPublicKey 序列化函数
-pub fn serialize_public_key<S>(public_key: &RsaPublicKey, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    let pem = public_key.to_pkcs1_pem(LineEnding::default()).expect("Failed to convert public key to PEM");
-    serializer.serialize_str(&pem)
-}
-
-/// RsaPublicKey 反序列化函数
-pub fn deserialize_public_key<'de, D>(deserializer: D) -> Result<RsaPublicKey, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let pem: String = Deserialize::deserialize(deserializer)?;
-    RsaPublicKey::from_pkcs1_pem(&pem).map_err(serde::de::Error::custom)
+/// PBFT 初始化函数
+pub async  fn init() -> Result<(Arc<UdpSocket>, Arc<Client>, Arc<Vec<SocketAddr>>, Arc<RwLock<State>>, Arc<RwLock<Pbft>>, tokio::sync::mpsc::Sender<()>, tokio::sync::mpsc::Receiver<()>), String> {
+   todo!()
 }

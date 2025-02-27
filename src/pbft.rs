@@ -1,9 +1,9 @@
 use super::message::PrePrepare;
+use crate::utils::get_current_timestamp;
 
 use std::collections::{HashMap, HashSet};
 
 /// PBFT 共识过程（待调整）
-#[derive(Debug, PartialEq)]
 pub enum Step {
     Initializing = 1,
     Initialized = 2,
@@ -26,4 +26,25 @@ pub struct Pbft {
     pub prepares: HashSet<u64>,
     pub commits: HashSet<u64>,
     pub view_change_mutiple_set: HashMap<u64, HashSet<u64>>, 
+}
+impl Pbft {
+    /// 初始化pbft共识状态
+    pub fn new(
+        view_number: u64,
+        sequence_number: u64,
+        nodes_number: u64
+    ) -> Self {
+        Pbft {
+            view_number: view_number,
+            sended_view_number: view_number,
+            sequence_number: sequence_number,
+            step: Step::Initializing,
+            start_time: get_current_timestamp(),
+            nodes_number: nodes_number,
+            preprepare: None,
+            prepares: HashSet::new(),
+            commits: HashSet::new(),
+            view_change_mutiple_set: HashMap::new(),
+        }
+    }
 }

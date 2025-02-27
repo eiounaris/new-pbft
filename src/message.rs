@@ -1,7 +1,7 @@
 use super::store::{Transaction, Block};
 
 use serde::{Deserialize, Serialize};
-
+use sha2::{Digest, Sha256};
 
 /// 消息类型（待调整）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +35,11 @@ pub struct Request {
     pub timestamp: u64,
     pub node_id: u64,
     pub signature: Vec<u8>, // -> all
+}
+impl Request {
+    pub fn digest_requests(requests: &Vec<Request>) -> Result<Vec<u8>, String> {
+        Ok(Sha256::digest(bincode::serialize(&requests).map_err(|e| e.to_string())?).to_vec())
+    }
 }
 
 /// 预准备消息（fine）
@@ -70,15 +75,15 @@ pub struct Commit {
 }
 
 /// 回应消息（PBFT 论文中涉及，目前暂时保留，该场景使用不到）
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct Reply {
-//     pub view_number: u64,
-//     pub timestamp: u64,
-//     pub client_id: u64,
-//     pub node_id: u64,
-//     pub result: String, // -> PrePrepare.digest
-//     pub signature: Vec<u8>, // -> all
-// }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Reply {
+    pub view_number: u64,
+    pub timestamp: u64,
+    pub client_id: u64,
+    pub node_id: u64,
+    pub result: String, // -> PrePrepare.digest
+    pub signature: Vec<u8>, // -> all
+}
 
 /// 视图切换消息（fine）
 #[derive(Debug, Clone, Serialize, Deserialize)]
