@@ -183,33 +183,35 @@ pub async fn request_handler(
                 println!("接收到合法 Request 消息");
                 if state.read().await.request_buffer.len() < 2 * (system_config.block_size as usize) {
                     state.write().await.add_request(request);
+                    println!("主节点请求缓存区大小：{}", state.read().await.request_buffer.len());
                 } else {
                     eprintln!("主节点请求缓冲已满，暂时丢弃该 Request 消息！！！");
                 }
                 
                 let pbft_read = pbft.read().await;
+                let state_read = state.read().await;
                 if (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceivingCommite) && (get_current_timestamp() - pbft_read.start_time > 1) {
                     pbft.write().await.step = Step::OK;
                 }
 
-                if pbft.read().await.step == Step::OK && state.read().await.request_buffer.len() >= system_config.block_size as usize {
+                if pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
                     let mut pbft_write = pbft.write().await;
                     pbft_write.start_time = get_current_timestamp();
                     pbft_write.preprepare = None;
                     pbft_write.prepares.clear();
                     pbft_write.commits.clear();
                     let mut transactions = Vec::new();
-                    for request in state.read().await.request_buffer.iter() {
+                    for request in state_read.request_buffer.iter() {
                         transactions.push(request.transaction.clone());
                     }
                     let mut pre_prepare = PrePrepare {
                         view_number: pbft_write.view_number,
                         sequence_number: pbft_write.sequence_number,
-                        digest: Request::digest_requests(&state.read().await.request_buffer)?,
+                        digest: Request::digest_requests(&state_read.request_buffer)?,
                         node_id: client.local_node_id,
                         signature: Vec::new(),
-                        requests: state.read().await.request_buffer.clone(),
-                        block: state.read().await.rocksdb.create_block(&transactions)?,
+                        requests: state_read.request_buffer.clone(),
+                        block: state_read.rocksdb.create_block(&transactions)?,
                     };
                     sign_preprepare(&client.private_key, &mut pre_prepare)?;
 
@@ -286,7 +288,9 @@ pub async fn hearbeat_handler(
     reset_sender: mpsc::Sender<()>,
     mut heartbeat: Hearbeat,
 ) -> Result<(), String> {
+    
     if heartbeat.view_number == system_config.view_number && verify_heartbeat(&client.identities[heartbeat.node_id as usize].public_key, &mut heartbeat)? {
+        // println!("接收到合法 Hearbeat 消息");
         reset_sender.send(()).await.map_err(|e| e.to_string())?;
     }
     Ok(())
