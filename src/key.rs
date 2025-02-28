@@ -100,6 +100,21 @@ pub fn verify_commit(pub_key: &RsaPublicKey, commit: &mut Commit) -> Result<bool
     Ok(true)
 }
 
+/// 签名心跳消息
+pub fn sign_heartbeat(priv_key: &RsaPrivateKey, hearbeat: &mut Hearbeat) -> Result<(), String> {
+    hearbeat.signature = sign_data(priv_key, &bincode::serialize(&hearbeat).map_err(|e| e.to_string())?)?;
+    Ok(())
+}
+/// 验证心跳消息
+pub fn verify_heartbeat(pub_key: &RsaPublicKey, hearbeat: &mut Hearbeat) -> Result<bool, String> {
+    let signature = hearbeat.signature.clone();
+    hearbeat.signature = Vec::new();
+    let hashed_data = Sha256::digest(&bincode::serialize(&hearbeat).map_err(|e| e.to_string())?);
+    pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &signature[..]).map_err(|e| e.to_string())?;
+    hearbeat.signature = signature;
+    Ok(true)
+}
+
 /// 签名试图切换消息
 pub fn sign_view_change(priv_key: &RsaPrivateKey, view_change: &mut ViewChange) -> Result<(), String> {
     view_change.signature = sign_data(priv_key, &bincode::serialize(&view_change).map_err(|e| e.to_string())?)?;

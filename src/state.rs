@@ -9,10 +9,10 @@ pub struct State {
 }
 impl State {
     /// 初始化状态
-    pub fn new() -> Result<Self, String> {
+    pub fn new(database_name: &str) -> Result<Self, String> {
         Ok(State {
             request_buffer: Vec::new(),
-            rocksdb : RocksDBBlockStore::new("state")?,
+            rocksdb : RocksDBBlockStore::new(database_name)?,
         })
     }
     /// 添加待处理请求添加到请求缓冲池

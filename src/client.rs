@@ -34,6 +34,6 @@ impl Client {
 
     /// 判断是否为主节点
     pub fn is_primarry(&self, view_number: u64) -> bool {
-        view_number % self.identities.len() as u64 == self.local_node_id
+        view_number % (self.identities.len() as u64) == self.local_node_id
     }
 }
