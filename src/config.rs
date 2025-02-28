@@ -8,7 +8,7 @@ use tokio::fs::read_to_string;
 pub struct Identity {
     pub node_id: u64,
     pub ip: String,
-    pub port: String,
+    pub port: u64,
     #[serde(deserialize_with = "deserialize_public_key")]
     pub public_key: RsaPublicKey,
 }
@@ -38,7 +38,7 @@ pub struct SystemConfig {
     pub view_number: u64,
     pub database_name: String,
     pub multi_cast_ip: String,
-    pub multi_cast_port: String,
+    pub multi_cast_port: u64,
     pub block_size: u64,
 }
 impl SystemConfig {
