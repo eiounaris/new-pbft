@@ -64,15 +64,23 @@ impl RocksDBBlockStore {
 
 impl BlockStore for RocksDBBlockStore {
     fn put_block(&self, block: &Block) -> Result<(), String> {
-        if let Ok(Some(last_block)) =  self.get_last_block() {
-            if last_block.index + 1 == block.index && last_block.hash == block.previous_hash {
-                let mut batch = rocksdb::WriteBatch::default();
-                batch.put(block.index.to_le_bytes(), bincode::serialize(block).map_err(|e| e.to_string())?);
-                batch.put(b"last_block_index", block.index.to_le_bytes());
-                self.db.write(batch)?;
+        match self.get_last_block() {
+            Ok(Some(last_block)) => {
+                if last_block.index + 1 == block.index && last_block.hash == block.previous_hash {
+                    let mut batch = rocksdb::WriteBatch::default();
+                    batch.put(block.index.to_le_bytes(), bincode::serialize(block).map_err(|e| e.to_string())?);
+                    batch.put(b"last_block_index", block.index.to_le_bytes());
+                    self.db.write(batch)?;
+                }
+                Ok(())
+            },
+            Ok(None) => {
+                Err("缺失创世区块".to_string())
+            }
+            Err(e) => {
+                Err(e)
             }
         }
-        Ok(())
     }
 
     fn get_block_by_index(&self, index: u64) -> Result<Option<Block>, String> {
@@ -88,7 +96,7 @@ impl BlockStore for RocksDBBlockStore {
     fn get_last_block(&self) -> Result<Option<Block>, String> {
         let last_block_index_key = b"last_block_index";
         if let Some(last_index_bytes) = self.db.get(last_block_index_key)? {
-            let last_index: u64 = u64::from_le_bytes(last_index_bytes.try_into().expect("字节切片长度不足"));
+            let last_index: u64 = u64::from_le_bytes(last_index_bytes.try_into().unwrap());
             self.get_block_by_index(last_index)
         } else {
             Ok(None)
@@ -133,7 +141,7 @@ impl BlockStore for RocksDBBlockStore {
         
             Ok(new_block)
         } else {
-            Err("前区块不存在".to_string())
+            Err("缺失创世区块".to_string())
         }
     }
 }

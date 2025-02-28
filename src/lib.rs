@@ -119,11 +119,6 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
                 MessageType::Request,
                 &bincode::serialize(&request).map_err(|e| e.to_string())?,
             ).await;
-            
-            println!("{:?}", key::verify_request(&client.public_key, &mut request)?);
-            // let mut request_cp = request.clone();
-            let mut request_cp = bincode::deserialize::<Request>(&bincode::serialize(&request).unwrap()).unwrap();
-            println!("{:?}", key::verify_request(&client.identities[request.node_id as usize].public_key, &mut request_cp)?);
         }
     }
     Ok(())

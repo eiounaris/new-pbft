@@ -22,5 +22,4 @@ impl State {
     pub fn add_requests(&mut self, request: &mut Vec<Request>) {
         self.request_buffer.append(request);
     }
-
 }
