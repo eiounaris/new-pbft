@@ -120,6 +120,10 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
                 MessageType::Request,
                 &bincode::serialize(&request).map_err(|e| e.to_string())?,
             ).await;
+            let mut request = bincode::deserialize::<Request>(&bincode::serialize(&request).unwrap()).unwrap();
+            if crate::key::verify_request(&client.identities[request.node_id as usize].public_key, &mut request)? {
+                println!("debug`")
+            }
         }
     }
     Ok(())
