@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables)]
 
-use super::store::Transaction;
+use crate::store::Transaction;
 
 use sha2::{Sha256, Digest};
 

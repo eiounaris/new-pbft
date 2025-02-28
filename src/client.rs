@@ -1,4 +1,4 @@
-use super::config::Identity;
+use crate::config::Identity;
 
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use tokio::net::UdpSocket;
