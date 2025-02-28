@@ -96,17 +96,8 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
         let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
         let content: Vec<u8> = bincode::serialize(&request).map_err(|e| e.to_string())?;
         if line == "test" {
-            print!("测试次数(默认1次）：");
-            let mut count = String::new();
-            std::io::stdin().read_line(&mut count).unwrap();
-            let count: u32 = count.trim().parse().unwrap_or(1);
-
-            print!("请求间隔(默认1000毫秒）：");
-            let mut interval_ms = String::new();
-            std::io::stdin().read_line(&mut interval_ms).unwrap();
-            let interval_ms: u64 = interval_ms.trim().parse().unwrap_or(1000);
-            let interval = Duration::from_millis(interval_ms);
-
+            let count: u32 = 100;
+            let interval = Duration::from_millis(100);
             for i in 0..count {
                 send_udp_data(
                     &client.local_udp_socket,
