@@ -375,7 +375,7 @@ pub async fn hearbeat_handler(
     mut heartbeat: Hearbeat,
 ) -> Result<(), String> {
     if heartbeat.view_number == system_config.view_number && verify_heartbeat(&client.identities[heartbeat.node_id as usize].public_key, &mut heartbeat)? {
-        println!("接收到合法 Hearbeat 消息");
+        // println!("接收到合法 Hearbeat 消息");
         reset_sender.send(()).await.map_err(|e| e.to_string())?; // 重置视图切换计时器
     }
     Ok(())
