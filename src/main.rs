@@ -22,7 +22,7 @@ async fn main() -> Result<(), String> {
                 let pbft = pbft.clone();
                 async move {
                     if let Err(e) = new_pbft::view_request(system_config, client, pbft).await {
-                        eprintln!("\n{e:?}");
+                        eprintln!("{e:?}");
                     }
                 }
             });
