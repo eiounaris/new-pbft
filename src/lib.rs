@@ -25,6 +25,9 @@ use tokio::{ net::UdpSocket, io::AsyncBufReadExt};
 use tokio::time::{interval, Duration, sleep};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
+// use tokio::io;
+// use std::io;
+
 use dotenv::dotenv;
 
 use std::env;
@@ -90,13 +93,15 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
             signature: Vec::new(),
         };
         sign_request(&client.private_key, &mut request)?;
+        let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
+        let content: Vec<u8> = bincode::serialize(&request).map_err(|e| e.to_string())?;
         if line == "test" {
-            print!("请输入测试次数(默认1次）：");
+            print!("测试次数(默认1次）：");
             let mut count = String::new();
             std::io::stdin().read_line(&mut count).unwrap();
             let count: u32 = count.trim().parse().unwrap_or(1);
 
-            print!("请输入请求间隔时间（毫秒）(默认1000毫秒）：");
+            print!("请求间隔(默认1000毫秒）：");
             let mut interval_ms = String::new();
             std::io::stdin().read_line(&mut interval_ms).unwrap();
             let interval_ms: u64 = interval_ms.trim().parse().unwrap_or(1000);
@@ -105,9 +110,9 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
             for i in 0..count {
                 send_udp_data(
                     &client.local_udp_socket,
-                    &format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
+                    &multicast_addr,
                     MessageType::Request,
-                    &bincode::serialize(&request).map_err(|e| e.to_string())?,
+                    &content,
                 ).await;
                 sleep(interval).await;
                 println!("第 {} 次请求完成", i + 1);
@@ -115,9 +120,9 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
         } else {
             send_udp_data(
                 &client.local_udp_socket,
-                &format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
+                &multicast_addr,
                 MessageType::Request,
-                &bincode::serialize(&request).map_err(|e| e.to_string())?,
+                &content,
             ).await;
         }
     }
