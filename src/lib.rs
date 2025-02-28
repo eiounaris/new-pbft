@@ -181,7 +181,7 @@ pub async fn handle_message(
                 println!("接收到 Reply 消息");
             },
             MessageType::Hearbeat => {
-                println!("接收到 Hearbeat 消息");
+                // println!("接收到 Hearbeat 消息");
                 reset_sender.send(()).await.map_err(|e| e.to_string())?;
             },
             MessageType::ViewChange => {
@@ -229,7 +229,7 @@ pub async fn heartbeat(
         tokio::select! {
             _ = interval.tick() => {
                 if client.is_primarry(system_config.view_number) {
-                    println!("主节点发送 Hearbeat 消息");
+                    // println!("主节点发送 Hearbeat 消息");
                     let mut heartbeat = Hearbeat {
                         view_number: system_config.view_number,
                         sequence_number: pbft.read().await.sequence_number,
