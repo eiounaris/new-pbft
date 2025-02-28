@@ -45,10 +45,10 @@ pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<RwLock<State>
     let public_key_path = env::var("public_key_path").map_err(|e| e.to_string())?;
     println!("{local_node_id:?}, {identity_config_path:?}, {system_config_path:?}, {private_key_path:?}, {public_key_path:?}");
     // 加载初始信息
-    let identities = Identity::load_identity(identity_config_path)?;
-    let system_config = SystemConfig::load_system_config(system_config_path)?;
-    let private_key = load_private_key(&private_key_path)?;
-    let public_key = load_public_key(&public_key_path)?;
+    let identities = Identity::load_identity(identity_config_path).await?;
+    let system_config = SystemConfig::load_system_config(system_config_path).await?;
+    let private_key = load_private_key(&private_key_path).await?;
+    let public_key = load_public_key(&public_key_path).await?;
     let local_identitiy = identities.iter().find(|identity| identity.node_id == local_node_id).unwrap_or(&identities[0]);
     // 创建广播套接字
     let udp_socket = UdpSocket::bind(format!("{}:{}", "0.0.0.0", system_config.multi_cast_port)).await.map_err(|e| e.to_string())?;

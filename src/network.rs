@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_variables)]
 
 
-use super::message::MessageType;
+use crate::message::MessageType;
 
 use tokio::net::UdpSocket;
 

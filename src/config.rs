@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use rsa::{pkcs1::DecodeRsaPublicKey, RsaPublicKey};
-
+use tokio::fs::read_to_string;
 // ---
 
 /// 身份配置（fine）
@@ -8,15 +8,15 @@ use rsa::{pkcs1::DecodeRsaPublicKey, RsaPublicKey};
 pub struct Identity {
     pub node_id: u64,
     pub ip: String,
-    pub port: u16,
+    pub port: String,
     #[serde(deserialize_with = "deserialize_public_key")]
     pub public_key: RsaPublicKey,
 }
 impl Identity {
     /// 从文件加载节点身份信息
-    pub fn load_identity(filepath: String) -> Result<Vec<Identity>, String> {
-        let identity_json = std::fs::read_to_string(filepath).map_err(|e| e.to_string())?;
-        let identitys: Vec<Identity> = serde_json::from_str(&identity_json).map_err(|e| e.to_string())?;
+    pub async  fn load_identity(filepath: String) -> Result<Vec<Identity>, String> {
+        let identitys_json = read_to_string(filepath).await.map_err(|e| e.to_string())?;
+        let identitys: Vec<Identity> = serde_json::from_str(&identitys_json).map_err(|e| e.to_string())?;
         Ok(identitys)
     }
 }
@@ -38,13 +38,13 @@ pub struct SystemConfig {
     pub view_number: u64,
     pub database_name: String,
     pub multi_cast_ip: String,
-    pub multi_cast_port: u64,
+    pub multi_cast_port: String,
     pub block_size: u64,
 }
 impl SystemConfig {
     /// 从文件加载系统配置
-    pub fn load_system_config(filepath: String) -> Result<SystemConfig, String> {
-        let system_config_json = std::fs::read_to_string(filepath).map_err(|e| e.to_string())?;
+    pub async fn load_system_config(filepath: String) -> Result<SystemConfig, String> {
+        let system_config_json = read_to_string(filepath).await.map_err(|e| e.to_string())?;
         let system_config: SystemConfig = serde_json::from_str(&system_config_json).map_err(|e| e.to_string())?;
         Ok(system_config)
     }

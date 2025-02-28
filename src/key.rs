@@ -3,24 +3,18 @@ use super::message::*;
 
 use rsa::{pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey}, Pkcs1v15Sign, RsaPrivateKey, RsaPublicKey};
 use sha2::{Sha256, Digest};
-
-
-use std::{fs::File, io::Read};
+use tokio::fs::read_to_string;
 
 
 /// 加载私钥
-pub fn load_private_key(file_path: &str) -> Result<RsaPrivateKey, String> {
-    let mut file = File::open(file_path).map_err(|e| e.to_string())?;
-    let mut pem = String::new();
-    file.read_to_string(&mut pem).map_err(|e| e.to_string())?;
+pub async fn load_private_key(file_path: &str) -> Result<RsaPrivateKey, String> {
+    let pem = read_to_string(file_path).await.map_err(|e| e.to_string())?;
     Ok(RsaPrivateKey::from_pkcs1_pem(&pem).map_err(|e| e.to_string())?)
 }
 
 /// 加载公钥
-pub fn load_public_key(file_path: &str) -> Result<RsaPublicKey, String> {
-    let mut file = File::open(file_path).map_err(|e| e.to_string())?;
-    let mut pem = String::new();
-    file.read_to_string(&mut pem).map_err(|e| e.to_string())?;
+pub async fn load_public_key(file_path: &str) -> Result<RsaPublicKey, String> {
+    let pem = read_to_string(file_path).await.map_err(|e| e.to_string())?;
     Ok(RsaPublicKey::from_pkcs1_pem(&pem).map_err(|e| e.to_string())?)
 }
 
