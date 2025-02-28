@@ -181,45 +181,48 @@ pub async fn request_handler(
         if client.is_primarry(system_config.view_number) {
             if verify_request(&client.identities[request.node_id as usize].public_key, &mut request)? {
                 println!("，合法");
-                // if state.read().await.request_buffer.len() < 2 * (system_config.block_size as usize) {
-                //     state.write().await.add_request(request);
-                //     println!("主节点请求缓存区大小：{}", state.read().await.request_buffer.len());
-                // } else {
-                //     eprintln!("主节点请求缓冲已满，暂时丢弃该 Request 消息！！！");
-                // }
+
+                let mut state_write = state.write().await;
+                if state_write.request_buffer.len() < 2 * (system_config.block_size as usize) {
+                    state_write.add_request(request);
+                    println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
+                } else {
+                    eprintln!("主节点请求缓冲已满，暂时丢弃该 Request 消息！！！");
+                }
+                drop(state_write);
                 
-                // let pbft_read = pbft.read().await;
-                // let state_read = state.read().await;
-                // if (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceivingCommite) && (get_current_timestamp() - pbft_read.start_time > 1) {
-                //     pbft.write().await.step = Step::OK;
-                // }
 
-                // if pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
-                //     let mut pbft_write = pbft.write().await;
-                //     pbft_write.start_time = get_current_timestamp();
-                //     pbft_write.preprepare = None;
-                //     pbft_write.prepares.clear();
-                //     pbft_write.commits.clear();
-                //     let mut transactions = Vec::new();
-                //     for request in state_read.request_buffer.iter() {
-                //         transactions.push(request.transaction.clone());
-                //     }
-                //     let mut pre_prepare = PrePrepare {
-                //         view_number: pbft_write.view_number,
-                //         sequence_number: pbft_write.sequence_number,
-                //         digest: Request::digest_requests(&state_read.request_buffer)?,
-                //         node_id: client.local_node_id,
-                //         signature: Vec::new(),
-                //         requests: state_read.request_buffer.clone(),
-                //         block: state_read.rocksdb.create_block(&transactions)?,
-                //     };
-                //     sign_preprepare(&client.private_key, &mut pre_prepare)?;
+                let mut pbft_write = pbft.write().await;
+                if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceivingCommite) && (get_current_timestamp() - pbft_write.start_time > 1) {
+                    pbft_write.step = Step::OK;
+                }
 
-                //     println!("\n发送 PrePrepare 消息");
-                //     let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
-                //     let content = bincode::serialize(&pre_prepare).map_err(|e| e.to_string())?;
-                //     send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
-                // }
+                let state_read = state.read().await;
+                if pbft_write.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
+                    pbft_write.start_time = get_current_timestamp();
+                    pbft_write.preprepare = None;
+                    pbft_write.prepares.clear();
+                    pbft_write.commits.clear();
+                    let mut transactions = Vec::new();
+                    for request in state_read.request_buffer.iter() {
+                        transactions.push(request.transaction.clone());
+                    }
+                    let mut pre_prepare = PrePrepare {
+                        view_number: pbft_write.view_number,
+                        sequence_number: pbft_write.sequence_number,
+                        digest: Request::digest_requests(&state_read.request_buffer)?,
+                        node_id: client.local_node_id,
+                        signature: Vec::new(),
+                        requests: state_read.request_buffer.clone(),
+                        block: state_read.rocksdb.create_block(&transactions)?,
+                    };
+                    sign_preprepare(&client.private_key, &mut pre_prepare)?;
+
+                    println!("\n发送 PrePrepare 消息");
+                    let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
+                    let content = bincode::serialize(&pre_prepare).map_err(|e| e.to_string())?;
+                    send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
+                }
             }
         }
 
