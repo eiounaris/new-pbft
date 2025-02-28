@@ -11,16 +11,15 @@ mod utils;
 mod config;
 mod state;
 
-use message::Request;
 use store::{BlockStore, Transaction};
 use utils::get_current_timestamp;
-use key::{sign_request, sign_heartbeat, load_private_key, load_public_key};
+use key::{load_private_key, load_public_key, sign_heartbeat, sign_request};
 use network::send_udp_data;
-use message::{MessageType, Hearbeat};
+use message::{MessageType, Request, PrePrepare, Prepare, Commit,Reply, Hearbeat, ViewChange, NewView, ViewRequest, ViewResponse, StateRequest, StateResponse, SyncRequest, SyncResponse};
 use client::Client;
 use config::{SystemConfig, Identity};
 use state::State;
-use pbft::Pbft;
+use pbft::{Pbft, Step};
 
 use tokio::{ net::UdpSocket, io::AsyncBufReadExt};
 use tokio::time::{interval, Duration, sleep};
@@ -127,14 +126,15 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
 
 /// 任务: 接收并处理数据
 pub async fn handle_message(
-    clien: Arc<Client>, 
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
 ) -> Result<(), String> {
     let mut buf = Box::new([0u8; 102400]);
     loop {
-        let (udp_data_size, src_socket_addr) = clien.local_udp_socket.recv_from(buf.as_mut_slice()).await.map_err(|e| e.to_string())?;
+        let (udp_data_size, src_socket_addr) = client.local_udp_socket.recv_from(buf.as_mut_slice()).await.map_err(|e| e.to_string())?;
         // 提取消息类型（第一个字节）
         let message_type = match buf[0] {
             0 => MessageType::Request,
@@ -148,10 +148,10 @@ pub async fn handle_message(
             7 => MessageType::NewView,
 
             8 => MessageType::ViewRequest,
-            9 => MessageType::ViewReply,
+            9 => MessageType::ViewResponse,
 
             10 => MessageType::StateRequest,
-            11 => MessageType::StateReply,
+            11 => MessageType::StateResponse,
 
             12 => MessageType::SyncRequest,
             13 => MessageType::SyncResponse,
@@ -162,51 +162,249 @@ pub async fn handle_message(
             },
         };
 
+        // 提取消息内容（剩余的字节）
+        let content = &buf[1..udp_data_size];
+
         // 分别处理对应消息
         match message_type {
             // 处理请求消息
             MessageType::Request => {
                 println!("接收到 Request 消息");
+                if let Ok(request) = bincode::deserialize::<Request>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::request_handler(system_config, client, state, pbft, reset_sender, request).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::PrePrepare => {
                 println!("接收到 PrePrepare 消息");
+                if let Ok(preprepare) = bincode::deserialize::<PrePrepare>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::preprepare_handler(system_config, client, state, pbft, reset_sender, preprepare).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::Prepare => {
                 println!("接收到 Prepare 消息");
+                if let Ok(prepare) = bincode::deserialize::<Prepare>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::prepare_handler(system_config, client, state, pbft, reset_sender, prepare).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::Commit => {
                 println!("接收到 Commit 消息");
+                if let Ok(commit) = bincode::deserialize::<Commit>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::commit_handler(system_config, client, state, pbft, reset_sender, commit).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::Reply => {
                 println!("接收到 Reply 消息");
+                if let Ok(reply) = bincode::deserialize::<Reply>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::reply_handler(system_config, client, state, pbft, reset_sender, reply).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::Hearbeat => {
                 // println!("接收到 Hearbeat 消息");
-                reset_sender.send(()).await.map_err(|e| e.to_string())?;
+                if let Ok(hearbeat) = bincode::deserialize::<Hearbeat>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::hearbeat_handler(system_config, client, state, pbft, reset_sender, hearbeat).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::ViewChange => {
                 println!("接收到 ViewChange 消息");
+                if let Ok(view_change) = bincode::deserialize::<ViewChange>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::view_change_handler(system_config, client, state, pbft, reset_sender, view_change).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::NewView => {
                 println!("接收到 NewView 消息");
+                if let Ok(new_view) = bincode::deserialize::<NewView>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::new_view_handler(system_config, client, state, pbft, reset_sender, new_view).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::ViewRequest => {
                 println!("接收到 ViewRequest 消息");
+                if let Ok(view_request) = bincode::deserialize::<ViewRequest>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::view_request_handler(system_config, client, state, pbft, reset_sender, view_request).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
-            MessageType::ViewReply => {
-                println!("接收到 ViewReply 消息");
+            MessageType::ViewResponse => {
+                println!("接收到 ViewResponse 消息");
+                if let Ok(view_response) = bincode::deserialize::<ViewResponse>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::view_response_handler(system_config, client, state, pbft, reset_sender, view_response).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::StateRequest => {
                 println!("接收到 StateRequest 消息");
+                if let Ok(state_request) = bincode::deserialize::<StateRequest>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::state_request_handler(system_config, client, state, pbft, reset_sender, state_request).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
-            MessageType::StateReply => {
+            MessageType::StateResponse => {
                 println!("接收到 StateReply 消息");
+                if let Ok(state_response) = bincode::deserialize::<StateResponse>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::state_response_handler(system_config, client, state, pbft, reset_sender, state_response).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::SyncRequest => {
                 println!("接收到 SyncRequest 消息");
+                if let Ok(sync_request) = bincode::deserialize::<SyncRequest>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::sync_request_handler(system_config, client, state, pbft, reset_sender, sync_request).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::SyncResponse => {
                 println!("接收到 SyncResponse 消息");
+                if let Ok(sync_response) = bincode::deserialize::<SyncResponse>(content).map_err(|e| e.to_string()) {
+                    tokio::spawn({
+                        let system_config: Arc<SystemConfig> = system_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::sync_response_handler(system_config, client, state, pbft, reset_sender, sync_response).await {
+                                eprintln!("\n{e:?}");
+                            }
+                        }
+                    });
+                }
             },
             MessageType::Unknown => {
                 eprintln!("\nReiceive unknown message type");
@@ -282,5 +480,9 @@ pub async fn view_request (
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后获取视图编号
     println!("发送 ViewRequest 消息");
     send_udp_data(&client.local_udp_socket, &format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?, MessageType::ViewRequest, &Vec::new()).await;
+    sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态
+    if pbft.read().await.step == Step::ReceivingViewResponse {
+        pbft.write().await.step = Step::OK
+    }
     Ok(())
 }

@@ -33,8 +33,9 @@ async fn main() -> Result<(), String> {
                 let client = client.clone();
                 let state = state.clone();
                 let pbft = pbft.clone();
+                let reset_sender = reset_sender.clone();
                 async move {
-                    if let Err(e) = new_pbft::handle_message(client, state, pbft, reset_sender).await {
+                    if let Err(e) = new_pbft::handle_message(system_config, client, state, pbft, reset_sender).await {
                         eprintln!("\n{e:?}");
                     }
                 }

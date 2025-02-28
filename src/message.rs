@@ -1,8 +1,15 @@
 use super::store::{Transaction, Block};
+use super::SystemConfig;
+use super::Client;
+use crate::State;
+use crate::Pbft;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 
+use std::sync::Arc;
 /// 消息类型（待调整）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MessageType {
@@ -17,10 +24,10 @@ pub enum MessageType {
     NewView = 7,
     
     ViewRequest = 8,
-    ViewReply = 9,
+    ViewResponse = 9,
 
     StateRequest = 10,
-    StateReply = 11,
+    StateResponse = 11,
 
     SyncRequest = 12,
     SyncResponse = 13,
@@ -85,6 +92,15 @@ pub struct Reply {
     pub signature: Vec<u8>, // -> all
 }
 
+/// 心跳消息（fine）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Hearbeat {
+    pub view_number: u64,
+    pub sequence_number: u64,
+    pub node_id: u64,
+    pub signature: Vec<u8>, // -> all
+}
+
 /// 视图切换消息（fine）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViewChange {
@@ -105,14 +121,27 @@ pub struct NewView {
     pub signature: Vec<u8>, // -> all
 }
 
-/// 心跳消息（fine）
+/// 试图请求消息（fine）
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Hearbeat {
-    pub view_number: u64,
-    pub sequence_number: u64,
-    pub node_id: u64,
-    pub signature: Vec<u8>, // -> all
+pub struct ViewRequest {
 }
+
+/// 试图请求响应消息（fine）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewResponse {
+    pub view_number: u64,
+}
+
+///
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StateRequest {
+}
+
+///
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StateResponse {
+}
+
 
 /// 同步请求消息（fine）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,4 +162,176 @@ pub struct SyncResponse {
     pub node_id: u64,
     pub blocks: Vec<Block>,
     pub signature: Vec<u8>, // -> all
+}
+
+
+
+pub async fn request_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    request: Request,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn preprepare_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    preprepare: PrePrepare,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn prepare_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    prepare: Prepare,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn commit_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    commit: Commit,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn reply_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    reply: Reply,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn hearbeat_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    heartbeat: Hearbeat,
+) -> Result<(), String> {
+    reset_sender.send(()).await.map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+pub async fn view_change_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    reqview_changeuest: ViewChange,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn new_view_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    new_view: NewView,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn view_request_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    view_request: ViewRequest,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn view_response_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    view_response: ViewResponse,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+
+pub async fn state_request_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    state_request: StateRequest,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn state_response_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    state_response: StateResponse,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn sync_request_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    sync_request: SyncRequest,
+) -> Result<(), String> {
+        
+
+    Ok(())
+}
+pub async fn sync_response_handler(
+    system_config : Arc<SystemConfig>,
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>, 
+    pbft: Arc<RwLock<Pbft>>,
+    reset_sender: mpsc::Sender<()>,
+    sync_response: SyncResponse,
+) -> Result<(), String> {
+        
+
+    Ok(())
 }

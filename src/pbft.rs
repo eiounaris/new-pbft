@@ -4,14 +4,17 @@ use crate::utils::get_current_timestamp;
 use std::collections::{HashMap, HashSet};
 
 /// PBFT 共识过程（待调整）
+#[derive(PartialEq)]
 pub enum Step {
-    Initializing = 1,
-    Initialized = 2,
+    ReceivingViewResponse = 0,
+    ReceivingStateResponse = 1,
+    Initializing = 2,
+    Initialized = 3,
 
-    OK = 3,
-    PrePrepared = 4,
-    Prepared = 5,
-    Commited = 6,
+    OK = 4,
+    PrePrepared = 5,
+    Prepared = 6,
+    Commited = 7,
 }
 
 /// 存储 pbft 共识过程状态信息（待调整）
@@ -38,7 +41,7 @@ impl Pbft {
             view_number: view_number,
             sended_view_number: view_number,
             sequence_number: sequence_number,
-            step: Step::Initializing,
+            step: Step::ReceivingViewResponse,
             start_time: get_current_timestamp(),
             nodes_number: nodes_number,
             preprepare: None,
