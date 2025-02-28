@@ -247,10 +247,11 @@ pub async fn preprepare_handler(
             println!("从节点接收到合法 PrePrepare 消息");
             reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
 
-            let pbft_read = pbft.read().await;
-            if (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceiveingCommit) && (get_current_timestamp() - pbft_read.start_time > 1) {
-                drop(pbft_read);
-                pbft.write().await.step = Step::OK;
+            {
+                let mut pbft_write = pbft.write().await;
+                if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit) && (get_current_timestamp() - pbft_write.start_time > 1) {
+                    pbft_write.step = Step::OK;
+                }
             }
 
             if pbft.read().await.step == Step::OK {
