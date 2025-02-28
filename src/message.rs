@@ -320,7 +320,6 @@ pub async fn prepare_handler(
                 send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Commit, &content).await;
 
                 pbft_write.commits.insert(client.local_node_id);
-                
             }
         }
     }
