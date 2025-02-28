@@ -182,6 +182,7 @@ pub async fn handle_message(
             },
             MessageType::Hearbeat => {
                 println!("接收到 Hearbeat 消息");
+                reset_sender.send(()).await.map_err(|e| e.to_string())?;
             },
             MessageType::ViewChange => {
                 println!("接收到 ViewChange 消息");
