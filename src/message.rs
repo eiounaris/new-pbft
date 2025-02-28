@@ -1,8 +1,8 @@
 use crate::network::send_udp_data;
-use crate::pbft::{self, Step};
+use crate::pbft::Step;
 use crate::store::{Block, BlockStore, Transaction};
 use crate::utils::get_current_timestamp;
-use crate::{state, SystemConfig};
+use crate::SystemConfig;
 use crate::Client;
 use crate::State;
 use crate::Pbft;
