@@ -170,7 +170,7 @@ pub async fn handle_message(
         match message_type {
             // 处理请求消息
             MessageType::Request => {
-                println!("接收到 Request 消息");
+                print!("接收到 Request 消息");
                 if let Ok(request) = bincode::deserialize::<Request>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();
@@ -187,7 +187,7 @@ pub async fn handle_message(
                 }
             },
             MessageType::PrePrepare => {
-                println!("接收到 PrePrepare 消息");
+                print!("接收到 PrePrepare 消息");
                 if let Ok(preprepare) = bincode::deserialize::<PrePrepare>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();
@@ -204,7 +204,7 @@ pub async fn handle_message(
                 }
             },
             MessageType::Prepare => {
-                println!("接收到 Prepare 消息");
+                print!("接收到 Prepare 消息");
                 if let Ok(prepare) = bincode::deserialize::<Prepare>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();
@@ -221,7 +221,7 @@ pub async fn handle_message(
                 }
             },
             MessageType::Commit => {
-                println!("接收到 Commit 消息");
+                print!("接收到 Commit 消息");
                 if let Ok(commit) = bincode::deserialize::<Commit>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();
@@ -255,7 +255,7 @@ pub async fn handle_message(
                 }
             },
             MessageType::Hearbeat => {
-                println!("接收到 Hearbeat 消息");
+                print!("接收到 Hearbeat 消息");
                 if let Ok(hearbeat) = bincode::deserialize::<Hearbeat>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();

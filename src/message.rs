@@ -180,7 +180,7 @@ pub async fn request_handler(
 ) -> Result<(), String> {
         if client.is_primarry(system_config.view_number) {
             if verify_request(&client.identities[request.node_id as usize].public_key, &mut request)? {
-                println!("Request 消息合法");
+                println!("，合法");
                 // if state.read().await.request_buffer.len() < 2 * (system_config.block_size as usize) {
                 //     state.write().await.add_request(request);
                 //     println!("主节点请求缓存区大小：{}", state.read().await.request_buffer.len());
@@ -236,7 +236,7 @@ pub async fn preprepare_handler(
 ) -> Result<(), String> {
     if !client.is_primarry(system_config.view_number) {
         if verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)? {
-            println!("PrePrepare 消息合法");
+            println!("，合法");
         }
     }
 
@@ -290,7 +290,7 @@ pub async fn hearbeat_handler(
 ) -> Result<(), String> {
     
     if heartbeat.view_number == system_config.view_number && verify_heartbeat(&client.identities[heartbeat.node_id as usize].public_key, &mut heartbeat)? {
-        println!("Hearbeat 消息合法");
+        println!("，合法");
         reset_sender.send(()).await.map_err(|e| e.to_string())?;
     }
     Ok(())
