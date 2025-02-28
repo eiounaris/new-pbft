@@ -428,7 +428,7 @@ pub async fn heartbeat(
         tokio::select! {
             _ = interval.tick() => {
                 if client.is_primarry(system_config.view_number) {
-                    // println!("主节点发送 Hearbeat 消息");
+                    println!("主节点发送 Hearbeat 消息");
                     let mut heartbeat = Hearbeat {
                         view_number: system_config.view_number,
                         sequence_number: pbft.read().await.sequence_number,
