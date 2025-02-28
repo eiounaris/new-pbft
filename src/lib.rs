@@ -279,7 +279,7 @@ pub async fn view_request (
     pbft: Arc<RwLock<Pbft>>,
 ) -> Result<(), String> {
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后获取视图编号
-    println!("发送 ViewChange 消息");
+    println!("发送 ViewRequest 消息");
     send_udp_data(&client.local_udp_socket, &format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?, MessageType::ViewRequest, &Vec::new()).await;
     Ok(())
 }
