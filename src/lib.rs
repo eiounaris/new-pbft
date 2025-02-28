@@ -59,7 +59,7 @@ pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<RwLock<State>
     udp_socket.set_multicast_loop_v4(false).map_err(|e| e.to_string())?;
     let udp_socket = Arc::new(udp_socket);
     // 输出本地节点初始化信息
-    println!("\n本地节点 {} 启动，地址：{}", local_node_id, format!("{}:{}", local_identitiy.ip, local_identitiy.port));
+    println!("本地节点 {} 启动，地址：{}", local_node_id, format!("{}:{}", local_identitiy.ip, local_identitiy.port));
     // 创建 client
     let client = Client::new(local_node_id, udp_socket.clone(), private_key, public_key, identities);
     // 创建 state
@@ -158,7 +158,7 @@ pub async fn handle_message(
             13 => MessageType::SyncResponse,
             
             _ => {
-                eprintln!("\nReiceive unknown message type");
+                eprintln!("Reiceive unknown message type");
                 continue;
             },
         };
@@ -170,7 +170,6 @@ pub async fn handle_message(
         match message_type {
             // 处理请求消息
             MessageType::Request => {
-                print!("接收到 Request 消息");
                 if let Ok(request) = bincode::deserialize::<Request>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();
@@ -180,14 +179,13 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::request_handler(system_config, client, state, pbft, reset_sender, request).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
             MessageType::PrePrepare => {
-                print!("接收到 PrePrepare 消息");
                 if let Ok(preprepare) = bincode::deserialize::<PrePrepare>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();
@@ -197,7 +195,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::preprepare_handler(system_config, client, state, pbft, reset_sender, preprepare).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -214,7 +212,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::prepare_handler(system_config, client, state, pbft, reset_sender, prepare).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -231,7 +229,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::commit_handler(system_config, client, state, pbft, reset_sender, commit).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -248,14 +246,13 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::reply_handler(system_config, client, state, pbft, reset_sender, reply).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
             MessageType::Hearbeat => {
-                print!("接收到 Hearbeat 消息");
                 if let Ok(hearbeat) = bincode::deserialize::<Hearbeat>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();
@@ -265,7 +262,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::hearbeat_handler(system_config, client, state, pbft, reset_sender, hearbeat).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -282,7 +279,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::view_change_handler(system_config, client, state, pbft, reset_sender, view_change).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -299,7 +296,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::new_view_handler(system_config, client, state, pbft, reset_sender, new_view).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -316,7 +313,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::view_request_handler(system_config, client, state, pbft, reset_sender, view_request).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -333,7 +330,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::view_response_handler(system_config, client, state, pbft, reset_sender, view_response).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -350,7 +347,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::state_request_handler(system_config, client, state, pbft, reset_sender, state_request).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -367,7 +364,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::state_response_handler(system_config, client, state, pbft, reset_sender, state_response).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -384,7 +381,7 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::sync_request_handler(system_config, client, state, pbft, reset_sender, sync_request).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
@@ -401,14 +398,14 @@ pub async fn handle_message(
                         let reset_sender = reset_sender.clone();
                         async move {
                             if let Err(e) = message::sync_response_handler(system_config, client, state, pbft, reset_sender, sync_response).await {
-                                eprintln!("\n{e:?}");
+                                eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
             MessageType::Unknown => {
-                eprintln!("\nReiceive unknown message type");
+                eprintln!("Reiceive unknown message type");
                 continue;
             }
         }

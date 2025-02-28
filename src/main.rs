@@ -36,7 +36,7 @@ async fn main() -> Result<(), String> {
                 let reset_sender = reset_sender.clone();
                 async move {
                     if let Err(e) = new_pbft::handle_message(system_config, client, state, pbft, reset_sender).await {
-                        eprintln!("\n{e:?}");
+                        eprintln!("{e:?}");
                     }
                 }
             });
@@ -48,7 +48,7 @@ async fn main() -> Result<(), String> {
                 let pbft = pbft.clone();
                 async move {
                     if let Err(e) = new_pbft::heartbeat(system_config, client, pbft).await {
-                        eprintln!("\n{e:?}");
+                        eprintln!("{e:?}");
                     }
                 }
             });
@@ -60,7 +60,7 @@ async fn main() -> Result<(), String> {
                 let pbft = pbft.clone();
                 async move {
                     if let Err(e) = new_pbft::view_change(system_config, client, pbft, reset_receiver).await {
-                        eprintln!("\n{e:?}");
+                        eprintln!("{e:?}");
                     }
                 }
             });
@@ -71,7 +71,7 @@ async fn main() -> Result<(), String> {
                 let system_config =  system_config.clone();
                 async move {
                     if let Err(e) = new_pbft::send_message(client, system_config).await {
-                        eprintln!("\n{e:?}");
+                        eprintln!("{e:?}");
                     }
                 }
             });
@@ -81,7 +81,7 @@ async fn main() -> Result<(), String> {
             tokio::try_join!(recv_task, heartbeat_task, view_change_task, send_task).unwrap();
         },
         
-        Err(e) => eprintln!("\n{e:?}"),
+        Err(e) => eprintln!("{e:?}"),
     }
     
     Ok(())

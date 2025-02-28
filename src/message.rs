@@ -180,7 +180,7 @@ pub async fn request_handler(
 ) -> Result<(), String> {
         if client.is_primarry(system_config.view_number) {
             if verify_request(&client.identities[request.node_id as usize].public_key, &mut request)? {
-                println!("，合法");
+                print!("主节点接收到合法 Request 消息");
 
                 let mut state_write = state.write().await;
                 if state_write.request_buffer.len() < 2 * (system_config.block_size as usize) {
@@ -199,6 +199,7 @@ pub async fn request_handler(
 
                 let state_read = state.read().await;
                 if pbft_write.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
+                    
                     pbft_write.start_time = get_current_timestamp();
                     pbft_write.preprepare = None;
                     pbft_write.prepares.clear();
@@ -218,10 +219,11 @@ pub async fn request_handler(
                     };
                     sign_preprepare(&client.private_key, &mut pre_prepare)?;
 
-                    println!("\n发送 PrePrepare 消息");
+                    println!("发送 PrePrepare 消息");
                     let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
                     let content = bincode::serialize(&pre_prepare).map_err(|e| e.to_string())?;
                     send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
+                    pbft_write.step = Step::ReceivingPrepare;
                 }
             }
         }
@@ -239,7 +241,7 @@ pub async fn preprepare_handler(
 ) -> Result<(), String> {
     if !client.is_primarry(system_config.view_number) {
         if verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)? {
-            println!("，合法");
+            println!("从节点接收到合法 PrePrepare 消息");
         }
     }
 
@@ -293,7 +295,7 @@ pub async fn hearbeat_handler(
 ) -> Result<(), String> {
     
     if heartbeat.view_number == system_config.view_number && verify_heartbeat(&client.identities[heartbeat.node_id as usize].public_key, &mut heartbeat)? {
-        println!("，合法");
+        println!("接收到合法 Hearbeat 消息");
         reset_sender.send(()).await.map_err(|e| e.to_string())?;
     }
     Ok(())
