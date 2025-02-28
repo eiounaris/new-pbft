@@ -180,22 +180,23 @@ pub async fn request_handler(
 ) -> Result<(), String> {
         if client.is_primarry(system_config.view_number) {
             if verify_request(&client.identities[request.node_id as usize].public_key, &mut request)? {
-                print!("主节点接收到合法 Request 消息");
+                println!("主节点接收到合法 Request 消息");
 
-                let mut state_write = state.write().await;
-                if state_write.request_buffer.len() < 2 * (system_config.block_size as usize) {
-                    state_write.add_request(request);
-                    println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
-                } else {
-                    eprintln!("主节点请求缓冲已满，暂时丢弃该 Request 消息！！！");
+                {
+                    let mut state_write = state.write().await;
+                    if state_write.request_buffer.len() < 2 * (system_config.block_size as usize) {
+                        state_write.add_request(request);
+                        println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
+                    } else {
+                        eprintln!("缓冲已满");
+                    }
                 }
-                drop(state_write);
                 
-
-                let pbft_read = pbft.read().await;
-                if (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceiveingCommit) && (get_current_timestamp() - pbft_read.start_time > 1) {
-                    drop(pbft_read);
-                    pbft.write().await.step = Step::OK;
+                {
+                    let mut pbft_write = pbft.write().await;
+                    if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit) && (get_current_timestamp() - pbft_write.start_time > 1) {
+                        pbft_write.step = Step::OK;
+                    }
                 }
 
                 let state_read = state.read().await;
@@ -206,10 +207,10 @@ pub async fn request_handler(
                     pbft_write.prepares.clear();
                     pbft_write.commits.clear();
                     
-                    let mut transactions = Vec::new();
-                    for request in state_read.request_buffer.iter() {
-                        transactions.push(request.transaction.clone());
-                    }
+                    let transactions = state_read.request_buffer.iter()
+                    .map(|req| req.transaction.clone())
+                    .collect();
+
                     let mut preprepare = PrePrepare {
                         view_number: pbft_write.view_number,
                         sequence_number: pbft_write.sequence_number,
