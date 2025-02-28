@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)]
+
 mod store;
 mod network;
 mod message;
@@ -9,25 +11,67 @@ mod utils;
 mod config;
 mod state;
 
-use crate::message::Request;
-use crate::store::Transaction;
-use crate::utils::get_current_timestamp;
-use crate::key::sign_request;
-use crate::network::send_udp_data;
-use crate::message::MessageType;
-use crate::client::Client;
-use crate::config::SystemConfig;
-use crate::state::State;
+use message::Request;
+use store::Transaction;
+use utils::get_current_timestamp;
+use key::{sign_request, load_private_key, load_public_key};
+use network::send_udp_data;
+use message::MessageType;
+use client::Client;
+use config::{SystemConfig, Identity};
+use state::State;
 use pbft::Pbft;
-
-
 
 use tokio::{ net::UdpSocket, sync::Mutex, io::AsyncBufReadExt};
 use tokio::time::{interval, Duration, sleep};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
+use dotenv::dotenv;
 
+use std::env;
 use std::sync::Arc;
+use std::net::SocketAddr;
+use std::net::Ipv4Addr;
+use std::str::FromStr;
+
+
+/// PBFT 初始化函数
+pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<Vec<SocketAddr>>, Arc<RwLock<State>>, Arc<RwLock<Pbft>>, tokio::sync::mpsc::Sender<()>, tokio::sync::mpsc::Receiver<()>), String> {
+
+    // 加载环境变量
+    dotenv().ok();
+    let local_node_id = env::var("local_node_id").map_err(|e| e.to_string())?.parse::<u64>().map_err(|e| e.to_string())?;
+    let identity_config_path = env::var("identity_config_path").map_err(|e| e.to_string())?;
+    let system_config_path = env::var("system_config_path").map_err(|e| e.to_string())?;
+    let private_key_path = env::var("private_key_path").map_err(|e| e.to_string())?;
+    let public_key_path = env::var("public_key_path").map_err(|e| e.to_string())?;
+    println!("{local_node_id:?}{identity_config_path:?}{system_config_path:?}{private_key_path:?}{public_key_path:?}");
+
+    // 加载初始信息
+    let identities = Identity::load_identity(identity_config_path)?;
+    let local_identitiy = identities.iter().find(|identity| identity.node_id == local_node_id).unwrap_or(&identities[0]);
+    let local_addr_string = format!("{}:{}", local_identitiy.ip, local_identitiy.port);
+    let system_config = SystemConfig::load_system_config(system_config_path)?;
+    let private_key = load_private_key(&private_key_path)?;
+    let public_key = load_public_key(&public_key_path)?;
+
+    
+
+    // 创建广播套接字
+    let udp_socket = UdpSocket::bind("0.0.0.0:8888").await.map_err(|e| e.to_string())?;
+    let multicast_addr = Ipv4Addr::from_str(&system_config.multi_cast_ip).map_err(|e| e.to_string())?;
+    let interface  = Ipv4Addr::new(0,0,0,0);
+    udp_socket.join_multicast_v4(multicast_addr, interface ).map_err(|e| e.to_string())?;
+    udp_socket.set_multicast_loop_v4(false).map_err(|e| e.to_string())?;
+    let udp_socket = Arc::new(udp_socket);
+
+    // 输出本地节点初始化信息
+    println!("\n本地节点 {} 启动，绑定到地址：{}", local_node_id, local_addr_string);
+    let client = Client::new(local_node_id, udp_socket.clone(), private_key, public_key, identities);
+
+    todo!()
+}
+
 
 /// 任务: 发送命令行指令数据，用于测试tps（待修改为高性能 Restful API 供本机用户调用）
 pub async fn send_message(local_udp_socket: Arc<UdpSocket>, client: &Client, system_config: Arc<SystemConfig>) -> Result<(), std::string::String> {
@@ -61,7 +105,7 @@ pub async fn send_message(local_udp_socket: Arc<UdpSocket>, client: &Client, sys
             for i in 0..count {
                 send_udp_data(
                     &local_udp_socket,
-                    &system_config.multi_cast_socket.parse().unwrap(),
+                    &format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse().unwrap(),
                     MessageType::Request,
                     &bincode::serialize(&request).map_err(|e| e.to_string())?,
                 ).await;
@@ -71,7 +115,7 @@ pub async fn send_message(local_udp_socket: Arc<UdpSocket>, client: &Client, sys
         } else {
             send_udp_data(
                 &local_udp_socket,
-                &system_config.multi_cast_socket.parse().unwrap(),
+                &format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse().unwrap(),
                 MessageType::Request,
                 &bincode::serialize(&request).map_err(|e| e.to_string())?,
             ).await;

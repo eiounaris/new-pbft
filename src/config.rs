@@ -37,7 +37,8 @@ where
 pub struct SystemConfig {
     pub view_number: u64,
     pub database_name: String,
-    pub multi_cast_socket: String,
+    pub multi_cast_ip: String,
+    pub multi_cast_port: u64,
     pub block_size: u64,
 }
 impl SystemConfig {
