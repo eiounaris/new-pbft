@@ -479,7 +479,9 @@ pub async fn view_request (
 ) -> Result<(), String> {
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后获取视图编号
     println!("发送 ViewRequest 消息");
-    send_udp_data(&client.local_udp_socket, &format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?, MessageType::ViewRequest, &Vec::new()).await;
+    let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
+    let content = Vec::new();        
+    send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::ViewRequest, &content).await;
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态
     if pbft.read().await.step == Step::ReceivingViewResponse {
         let mut pbft = pbft.write().await;

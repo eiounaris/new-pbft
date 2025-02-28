@@ -179,7 +179,7 @@ pub async fn request_handler(
     mut request: Request,
 ) -> Result<(), String> {
         if client.is_primarry(system_config.view_number) {
-            if verify_request(&client.public_key, &mut request)? {
+            if verify_request(&client.identities[system_config.view_number as usize % client.identities.len()].public_key, &mut request)? {
                 println!("接收到合法 Request 消息");
                 if state.read().await.request_buffer.len() < 2 * (system_config.block_size as usize) {
                     state.write().await.add_request(request);
@@ -223,6 +223,7 @@ pub async fn request_handler(
 
     Ok(())
 }
+
 pub async fn preprepare_handler(
     system_config : Arc<SystemConfig>,
     client: Arc<Client>, 
@@ -232,7 +233,7 @@ pub async fn preprepare_handler(
     mut preprepare: PrePrepare,
 ) -> Result<(), String> {
     if !client.is_primarry(system_config.view_number) {
-        if verify_preprepare(&client.public_key, &mut preprepare)? {
+        if verify_preprepare(&client.identities[system_config.view_number as usize % client.identities.len()].public_key, &mut preprepare)? {
             println!("接收到合法 PrePrepare 消息");
         }
     }
@@ -240,6 +241,7 @@ pub async fn preprepare_handler(
 
     Ok(())
 }
+
 pub async fn prepare_handler(
     system_config : Arc<SystemConfig>,
     client: Arc<Client>, 
@@ -282,12 +284,14 @@ pub async fn hearbeat_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    heartbeat: Hearbeat,
+    mut heartbeat: Hearbeat,
 ) -> Result<(), String> {
-    reset_sender.send(()).await.map_err(|e| e.to_string())?;
-
+    if heartbeat.view_number == system_config.view_number && verify_heartbeat(&client.identities[system_config.view_number as usize % client.identities.len()].public_key, &mut heartbeat)? {
+        reset_sender.send(()).await.map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
+
 pub async fn view_change_handler(
     system_config : Arc<SystemConfig>,
     client: Arc<Client>, 
