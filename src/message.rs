@@ -7,6 +7,7 @@ use crate::Client;
 use crate::State;
 use crate::Pbft;
 use crate::key::*;
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
@@ -278,35 +279,6 @@ pub async fn preprepare_handler(
                 send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Prepare, &content).await;
 
                 pbft_write.prepares.insert(client.local_node_id);
-                if pbft_write.prepares.len() as u64 >= 2 * ((client.identities.len() - 1) as u64 / 3u64) {
-                    pbft_write.step = Step::ReceiveingCommit;
-                    
-                    let mut commit = Commit {
-                        view_number: pbft_write.view_number,
-                        sequence_number: pbft_write.sequence_number,
-                        digest: prepare.digest,
-                        node_id: client.local_node_id,
-                        signature: Vec::new(),
-                    };
-                    sign_commit(&client.private_key, &mut commit)?;
-
-                    println!("发送 Commit 消息");
-                    let content = bincode::serialize(&commit).map_err(|e| e.to_string())?;
-                    send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Commit, &content).await;
-
-                    pbft_write.commits.insert(client.local_node_id);
-                    if pbft_write.commits.len() as u64 >= 2 * ((client.identities.len() - 1) as u64 / 3u64) + 1 {
-                        println!("至少 2f + 1 个节点达成共识");
-                        pbft_write.sequence_number += 1;
-                        let state_read = state.read().await;
-                        state_read.rocksdb.put_block(&preprepare.block)?;
-                        if client.is_primarry(system_config.view_number) {
-                            drop(state_read);
-                            state.write().await.request_buffer.drain(0..preprepare.requests.len());
-                        }
-                        pbft_write.step = Step::OK;
-                    }
-                }
             }
         }
     }
@@ -321,9 +293,37 @@ pub async fn prepare_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    prepare: Prepare,
+    mut prepare: Prepare,
 ) -> Result<(), String> {
-        
+    if verify_prepare(&client.identities[prepare.node_id as usize].public_key, &mut prepare)? {
+        println!("从节点接收到合法 Prepare 消息");
+
+        if pbft.read().await.step == Step::ReceivingPrepare && !pbft.read().await.prepares.contains(&prepare.node_id) {
+            let mut pbft_write = pbft.write().await;
+            pbft_write.prepares.insert(prepare.node_id);
+
+            if pbft_write.prepares.len() as u64 >= 2 * ((client.identities.len() - 1) as u64 / 3u64) {
+                pbft_write.step = Step::ReceiveingCommit;
+                
+                let mut commit = Commit {
+                    view_number: pbft_write.view_number,
+                    sequence_number: pbft_write.sequence_number,
+                    digest: prepare.digest,
+                    node_id: client.local_node_id,
+                    signature: Vec::new(),
+                };
+                sign_commit(&client.private_key, &mut commit)?;
+
+                println!("发送 Commit 消息");
+                let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
+                let content = bincode::serialize(&commit).map_err(|e| e.to_string())?;
+                send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Commit, &content).await;
+
+                pbft_write.commits.insert(client.local_node_id);
+                
+            }
+        }
+    }
 
     Ok(())
 }
@@ -333,9 +333,25 @@ pub async fn commit_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    commit: Commit,
+    mut commit: Commit,
 ) -> Result<(), String> {
-        
+    if pbft.read().await.step == Step::ReceiveingCommit && !pbft.read().await.commits.contains(&commit.node_id) && verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? {
+        let mut pbft_write = pbft.write().await;
+        pbft_write.commits.insert(commit.node_id);
+
+        if pbft_write.commits.len() as u64 >= 2 * ((client.identities.len() - 1) as u64 / 3u64) + 1 {
+            println!("至少 2f + 1 个节点达成共识");
+            pbft_write.sequence_number += 1;
+            let state_read = state.read().await;
+            let block = pbft_write.preprepare.clone().unwrap().block;
+            state_read.rocksdb.put_block(&block)?;
+            if client.is_primarry(system_config.view_number) {
+                drop(state_read);
+                state.write().await.request_buffer.drain(0..block.transactions.len());
+            }
+            pbft_write.step = Step::OK;
+        }
+    }
 
     Ok(())
 }

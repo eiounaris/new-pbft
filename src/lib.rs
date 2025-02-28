@@ -202,7 +202,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::Prepare => {
-                print!("接收到 Prepare 消息");
                 if let Ok(prepare) = bincode::deserialize::<Prepare>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();
@@ -219,7 +218,7 @@ pub async fn handle_message(
                 }
             },
             MessageType::Commit => {
-                print!("接收到 Commit 消息");
+                println!("接收到 Commit 消息");
                 if let Ok(commit) = bincode::deserialize::<Commit>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();
