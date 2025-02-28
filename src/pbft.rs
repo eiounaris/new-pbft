@@ -12,9 +12,8 @@ pub enum Step {
     Initialized = 3,
 
     OK = 4,
-    PrePrepared = 5,
-    Prepared = 6,
-    Commited = 7,
+    ReceivingPrepare = 5,
+    ReceivingCommite = 6,
 }
 
 /// 存储 pbft 共识过程状态信息（待调整）

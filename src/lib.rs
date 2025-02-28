@@ -482,7 +482,9 @@ pub async fn view_request (
     send_udp_data(&client.local_udp_socket, &format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?, MessageType::ViewRequest, &Vec::new()).await;
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态
     if pbft.read().await.step == Step::ReceivingViewResponse {
-        pbft.write().await.step = Step::OK
+        let mut pbft = pbft.write().await;
+        pbft.view_change_mutiple_set.clear();
+        pbft.step = Step::OK
     }
     Ok(())
 }

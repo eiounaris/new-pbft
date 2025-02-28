@@ -19,7 +19,7 @@ pub enum Transaction {
 pub struct Block {
     pub index: u64,
     pub timestamp: u64,
-    pub operations: Vec<Transaction>,
+    pub transactions: Vec<Transaction>,
     pub previous_hash: String,
     pub hash: String,
 }
@@ -49,7 +49,7 @@ impl RocksDBBlockStore {
             let genesis_block = Block {
                 index: 0,
                 timestamp: get_current_timestamp(),
-                operations: Vec::new(),
+                transactions: Vec::new(),
                 previous_hash: "genesis".to_string(),
                 hash: "genesis".to_string(),
             };
@@ -115,18 +115,18 @@ impl BlockStore for RocksDBBlockStore {
         Ok(Some(blocks))
     }
 
-    fn create_block(&self, operations: &Vec<Transaction>) -> Result<Block, String> {
+    fn create_block(&self, transactions: &Vec<Transaction>) -> Result<Block, String> {
         if let Ok(Some(last_block)) = self.get_last_block() {
             // 生成新区块
             let index = last_block.index + 1;
             let timestamp = get_current_timestamp();
             let previous_hash = last_block.hash;
-            let hash = calculate_block_hash(index, timestamp, operations, &previous_hash);
+            let hash = calculate_block_hash(index, timestamp, transactions, &previous_hash);
         
             let new_block = Block {
                 index,
                 timestamp,
-                operations: operations.clone(),
+                transactions: transactions.clone(),
                 previous_hash,
                 hash,
             };

@@ -1,14 +1,18 @@
-use crate::store::{Transaction, Block};
-use crate::SystemConfig;
+use crate::network::send_udp_data;
+use crate::pbft::{self, Step};
+use crate::store::{Block, BlockStore, Transaction};
+use crate::utils::get_current_timestamp;
+use crate::{state, SystemConfig};
 use crate::Client;
 use crate::State;
 use crate::Pbft;
-
+use crate::key::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 /// 消息类型（待调整）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,9 +176,50 @@ pub async fn request_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    request: Request,
+    mut request: Request,
 ) -> Result<(), String> {
-        
+        if client.is_primarry(system_config.view_number) {
+            if verify_request(&client.public_key, &mut request)? {
+                println!("接收到合法 Request 消息");
+                if state.read().await.request_buffer.len() < 2 * (system_config.block_size as usize) {
+                    state.write().await.add_request(request);
+                } else {
+                    eprintln!("主节点请求缓冲已满，暂时丢弃该 Request 消息！！！");
+                }
+                
+                let pbft_read = pbft.read().await;
+                if (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceivingCommite) && (get_current_timestamp() - pbft_read.start_time > 1) {
+                    pbft.write().await.step = Step::OK;
+                }
+
+                if pbft.read().await.step == Step::OK && state.read().await.request_buffer.len() >= system_config.block_size as usize {
+                    let mut pbft_write = pbft.write().await;
+                    pbft_write.start_time = get_current_timestamp();
+                    pbft_write.preprepare = None;
+                    pbft_write.prepares.clear();
+                    pbft_write.commits.clear();
+                    let mut transactions = Vec::new();
+                    for request in state.read().await.request_buffer.iter() {
+                        transactions.push(request.transaction.clone());
+                    }
+                    let mut pre_prepare = PrePrepare {
+                        view_number: pbft_write.view_number,
+                        sequence_number: pbft_write.sequence_number,
+                        digest: Request::digest_requests(&state.read().await.request_buffer)?,
+                        node_id: client.local_node_id,
+                        signature: Vec::new(),
+                        requests: state.read().await.request_buffer.clone(),
+                        block: state.read().await.rocksdb.create_block(&transactions)?,
+                    };
+                    sign_preprepare(&client.private_key, &mut pre_prepare)?;
+
+                    println!("\n发送 PrePrepare 消息");
+                    let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
+                    let content = bincode::serialize(&pre_prepare).map_err(|e| e.to_string())?;
+                    send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
+                }
+            }
+        }
 
     Ok(())
 }
@@ -184,9 +229,14 @@ pub async fn preprepare_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    preprepare: PrePrepare,
+    mut preprepare: PrePrepare,
 ) -> Result<(), String> {
-        
+    if !client.is_primarry(system_config.view_number) {
+        if verify_preprepare(&client.public_key, &mut preprepare)? {
+            println!("接收到合法 PrePrepare 消息");
+        }
+    }
+
 
     Ok(())
 }

@@ -49,18 +49,18 @@ pub fn verify_request(pub_key: &RsaPublicKey, request: &mut Request) -> Result<b
 }
 
 /// 签名预准备消息
-pub fn sign_pre_prepare(priv_key: &RsaPrivateKey, pre_prepare: &mut PrePrepare) -> Result<(), String> {
-    pre_prepare.signature = sign_data(priv_key, &bincode::serialize(&pre_prepare).map_err(|e| e.to_string())?)?;
+pub fn sign_preprepare(priv_key: &RsaPrivateKey, preprepare: &mut PrePrepare) -> Result<(), String> {
+    preprepare.signature = sign_data(priv_key, &bincode::serialize(&preprepare).map_err(|e| e.to_string())?)?;
     Ok(())
 }
 
 /// 验证预准备消息
-pub fn verify_pre_prepare(pub_key: &RsaPublicKey, pre_prepare: &mut PrePrepare) -> Result<bool, String> {
-    let signature = pre_prepare.signature.clone();
-    pre_prepare.signature = Vec::new();
-    let hashed_data = Sha256::digest(&bincode::serialize(&pre_prepare).map_err(|e| e.to_string())?);
+pub fn verify_preprepare(pub_key: &RsaPublicKey, preprepare: &mut PrePrepare) -> Result<bool, String> {
+    let signature = preprepare.signature.clone();
+    preprepare.signature = Vec::new();
+    let hashed_data = Sha256::digest(&bincode::serialize(&preprepare).map_err(|e| e.to_string())?);
     pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &signature[..]).map_err(|e| e.to_string())?;
-    pre_prepare.signature = signature;
+    preprepare.signature = signature;
     Ok(true)
 }
 
