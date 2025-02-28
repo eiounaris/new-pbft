@@ -40,7 +40,7 @@ pub enum MessageType {
 }
 
 /// 请求消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Request {
     pub transaction: Transaction,
     pub timestamp: u64,

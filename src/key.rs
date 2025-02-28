@@ -43,10 +43,9 @@ pub fn verify_request(pub_key: &RsaPublicKey, request: &mut Request) -> Result<b
     let signature = request.signature.clone();
     request.signature = Vec::new();
     let hashed_data = Sha256::digest(&bincode::serialize(&request).map_err(|e| e.to_string())?);
-    match pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &signature) {
-        Ok(_) => Ok(true),
-        Err(e) => Ok(false),
-    }
+    request.signature = signature;
+    pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &request.signature[..]).map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 /// 签名预准备消息

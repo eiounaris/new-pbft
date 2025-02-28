@@ -7,7 +7,7 @@ use bincode;
 use std::convert::TryInto;
 
 /// 事务（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Transaction {
     Tx0 = 0,
     Tx1 = 1,

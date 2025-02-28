@@ -90,7 +90,6 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
             signature: Vec::new(),
         };
         sign_request(&client.private_key, &mut request)?;
-        println!("{:?}", key::verify_request(&client.public_key, &mut request)?);
         if line == "test" {
             print!("请输入测试次数(默认1次）：");
             let mut count = String::new();
@@ -120,10 +119,11 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
                 MessageType::Request,
                 &bincode::serialize(&request).map_err(|e| e.to_string())?,
             ).await;
-            let mut request = bincode::deserialize::<Request>(&bincode::serialize(&request).unwrap()).unwrap();
-            if crate::key::verify_request(&client.identities[request.node_id as usize].public_key, &mut request)? {
-                println!("debug`")
-            }
+            
+            println!("{:?}", key::verify_request(&client.public_key, &mut request)?);
+            // let mut request_cp = request.clone();
+            let mut request_cp = bincode::deserialize::<Request>(&bincode::serialize(&request).unwrap()).unwrap();
+            println!("{:?}", key::verify_request(&client.identities[request.node_id as usize].public_key, &mut request_cp)?);
         }
     }
     Ok(())
