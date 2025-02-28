@@ -13,7 +13,7 @@ pub enum Step {
 
     OK = 4,
     ReceivingPrepare = 5,
-    ReceivingCommite = 6,
+    ReceiveingCommit = 6,
 }
 
 /// 存储 pbft 共识过程状态信息（待调整）

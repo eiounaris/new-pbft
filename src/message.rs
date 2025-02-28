@@ -192,23 +192,25 @@ pub async fn request_handler(
                 drop(state_write);
                 
 
-                let mut pbft_write = pbft.write().await;
-                if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceivingCommite) && (get_current_timestamp() - pbft_write.start_time > 1) {
-                    pbft_write.step = Step::OK;
+                let pbft_read = pbft.read().await;
+                if (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceiveingCommit) && (get_current_timestamp() - pbft_read.start_time > 1) {
+                    drop(pbft_read);
+                    pbft.write().await.step = Step::OK;
                 }
 
                 let state_read = state.read().await;
-                if pbft_write.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
-                    
+                if pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
+                    let mut pbft_write = pbft.write().await;
+                    pbft_write.step = Step::ReceivingPrepare;
                     pbft_write.start_time = get_current_timestamp();
-                    pbft_write.preprepare = None;
                     pbft_write.prepares.clear();
                     pbft_write.commits.clear();
+                    
                     let mut transactions = Vec::new();
                     for request in state_read.request_buffer.iter() {
                         transactions.push(request.transaction.clone());
                     }
-                    let mut pre_prepare = PrePrepare {
+                    let mut preprepare = PrePrepare {
                         view_number: pbft_write.view_number,
                         sequence_number: pbft_write.sequence_number,
                         digest: Request::digest_requests(&state_read.request_buffer)?,
@@ -217,13 +219,13 @@ pub async fn request_handler(
                         requests: state_read.request_buffer.clone(),
                         block: state_read.rocksdb.create_block(&transactions)?,
                     };
-                    sign_preprepare(&client.private_key, &mut pre_prepare)?;
+                    sign_preprepare(&client.private_key, &mut preprepare)?;
+                    pbft_write.preprepare = Some(preprepare.clone());
 
                     println!("发送 PrePrepare 消息");
                     let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
-                    let content = bincode::serialize(&pre_prepare).map_err(|e| e.to_string())?;
+                    let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
                     send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
-                    pbft_write.step = Step::ReceivingPrepare;
                 }
             }
         }
@@ -242,6 +244,68 @@ pub async fn preprepare_handler(
     if !client.is_primarry(system_config.view_number) {
         if verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)? {
             println!("从节点接收到合法 PrePrepare 消息");
+            reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
+
+            let pbft_read = pbft.read().await;
+            if (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceiveingCommit) && (get_current_timestamp() - pbft_read.start_time > 1) {
+                drop(pbft_read);
+                pbft.write().await.step = Step::OK;
+            }
+
+            if pbft.read().await.step == Step::OK {
+                let mut pbft_write = pbft.write().await;
+                pbft_write.step = Step::ReceivingPrepare;
+                pbft_write.start_time = get_current_timestamp();
+                pbft_write.preprepare = Some(preprepare.clone());
+                pbft_write.prepares.clear();
+                pbft_write.commits.clear();
+                
+
+                let mut prepare = Prepare {
+                    view_number: pbft_write.view_number,
+                    sequence_number: pbft_write.sequence_number,
+                    digest: preprepare.digest,
+                    node_id: client.local_node_id,
+                    signature: Vec::new(),
+                };
+                sign_prepare(&client.private_key, &mut prepare)?;
+
+                println!("发送 Prepare 消息");
+                let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
+                let content = bincode::serialize(&prepare).map_err(|e| e.to_string())?;
+                send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Prepare, &content).await;
+
+                pbft_write.prepares.insert(client.local_node_id);
+                if pbft_write.prepares.len() as u64 >= 2 * ((client.identities.len() - 1) as u64 / 3u64) {
+                    pbft_write.step = Step::ReceiveingCommit;
+                    
+                    let mut commit = Commit {
+                        view_number: pbft_write.view_number,
+                        sequence_number: pbft_write.sequence_number,
+                        digest: prepare.digest,
+                        node_id: client.local_node_id,
+                        signature: Vec::new(),
+                    };
+                    sign_commit(&client.private_key, &mut commit)?;
+
+                    println!("发送 Commit 消息");
+                    let content = bincode::serialize(&commit).map_err(|e| e.to_string())?;
+                    send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Commit, &content).await;
+
+                    pbft_write.commits.insert(client.local_node_id);
+                    if pbft_write.commits.len() as u64 >= 2 * ((client.identities.len() - 1) as u64 / 3u64) + 1 {
+                        println!("至少 2f + 1 个节点达成共识");
+                        pbft_write.sequence_number += 1;
+                        let state_read = state.read().await;
+                        state_read.rocksdb.put_block(&preprepare.block)?;
+                        if client.is_primarry(system_config.view_number) {
+                            drop(state_read);
+                            state.write().await.request_buffer.drain(0..preprepare.requests.len());
+                        }
+                        pbft_write.step = Step::OK;
+                    }
+                }
+            }
         }
     }
 
@@ -293,10 +357,9 @@ pub async fn hearbeat_handler(
     reset_sender: mpsc::Sender<()>,
     mut heartbeat: Hearbeat,
 ) -> Result<(), String> {
-    
     if heartbeat.view_number == system_config.view_number && verify_heartbeat(&client.identities[heartbeat.node_id as usize].public_key, &mut heartbeat)? {
         println!("接收到合法 Hearbeat 消息");
-        reset_sender.send(()).await.map_err(|e| e.to_string())?;
+        reset_sender.send(()).await.map_err(|e| e.to_string())?; // 重置视图切换计时器
     }
     Ok(())
 }
