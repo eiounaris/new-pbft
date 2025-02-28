@@ -218,7 +218,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::Commit => {
-                println!("接收到 Commit 消息");
                 if let Ok(commit) = bincode::deserialize::<Commit>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let system_config: Arc<SystemConfig> = system_config.clone();

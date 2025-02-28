@@ -181,7 +181,7 @@ pub async fn request_handler(
 ) -> Result<(), String> {
         if client.is_primarry(system_config.view_number) {
             if verify_request(&client.identities[request.node_id as usize].public_key, &mut request)? {
-                println!("主节点接收到合法 Request 消息");
+                println!("接收 Request 消息");
 
                 {
                     let mut state_write = state.write().await;
@@ -245,7 +245,7 @@ pub async fn preprepare_handler(
 ) -> Result<(), String> {
     if !client.is_primarry(system_config.view_number) {
         if verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)? {
-            println!("从节点接收到合法 PrePrepare 消息");
+            println!("接收 PrePrepare 消息");
             reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
 
             {
@@ -296,7 +296,7 @@ pub async fn prepare_handler(
     mut prepare: Prepare,
 ) -> Result<(), String> {
     if verify_prepare(&client.identities[prepare.node_id as usize].public_key, &mut prepare)? {
-        println!("从节点接收到合法 Prepare 消息");
+        println!("接收 Prepare 消息");
 
         if pbft.read().await.step == Step::ReceivingPrepare && !pbft.read().await.prepares.contains(&prepare.node_id) {
             let mut pbft_write = pbft.write().await;
@@ -335,6 +335,7 @@ pub async fn commit_handler(
     mut commit: Commit,
 ) -> Result<(), String> {
     if pbft.read().await.step == Step::ReceiveingCommit && !pbft.read().await.commits.contains(&commit.node_id) && verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? {
+        println!("接收 Commit 消息");
         let mut pbft_write = pbft.write().await;
         pbft_write.commits.insert(commit.node_id);
 
