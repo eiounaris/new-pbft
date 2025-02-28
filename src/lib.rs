@@ -45,10 +45,8 @@ pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<RwLock<State>
     let public_key_path = env::var("public_key_path").map_err(|e| e.to_string())?;
     println!("{local_node_id:?}, {identity_config_path:?}, {system_config_path:?}, {private_key_path:?}, {public_key_path:?}");
     // 加载初始信息
-    println!("debug");
     let identities = Identity::load_identity(identity_config_path).await?;
     let system_config = SystemConfig::load_system_config(system_config_path).await?;
-    println!("debug");
     let private_key = load_private_key(&private_key_path).await?;
     let public_key = load_public_key(&public_key_path).await?;
     let local_identitiy = identities.iter().find(|identity| identity.node_id == local_node_id).unwrap_or(&identities[0]);
@@ -92,6 +90,7 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
             signature: Vec::new(),
         };
         sign_request(&client.private_key, &mut request)?;
+        println!("{:?}", key::verify_request(&client.public_key, &mut request)?);
         if line == "test" {
             print!("请输入测试次数(默认1次）：");
             let mut count = String::new();
