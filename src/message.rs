@@ -390,7 +390,7 @@ pub async fn reply_handler(
     reset_sender: mpsc::Sender<()>,
     reply: Reply,
 ) -> Result<(), String> {
-        
+    println!("接收到 Reply 消息");
 
     Ok(())
 }
@@ -419,7 +419,7 @@ pub async fn view_change_handler(
     reset_sender: mpsc::Sender<()>,
     reqview_changeuest: ViewChange,
 ) -> Result<(), String> {
-        
+    println!("接收到 ViewChange 消息");
 
     Ok(())
 }
@@ -432,7 +432,7 @@ pub async fn new_view_handler(
     reset_sender: mpsc::Sender<()>,
     new_view: NewView,
 ) -> Result<(), String> {
-        
+    println!("接收到 NewView 消息");
 
     Ok(())
 }
@@ -445,7 +445,7 @@ pub async fn view_request_handler(
     reset_sender: mpsc::Sender<()>,
     view_request: ViewRequest,
 ) -> Result<(), String> {
-        
+    println!("接收到 ViewRequest 消息");
 
     Ok(())
 }
@@ -458,7 +458,7 @@ pub async fn view_response_handler(
     reset_sender: mpsc::Sender<()>,
     view_response: ViewResponse,
 ) -> Result<(), String> {
-        
+    println!("接收到 ViewResponse 消息");
 
     Ok(())
 }
@@ -472,7 +472,7 @@ pub async fn state_request_handler(
     reset_sender: mpsc::Sender<()>,
     state_request: StateRequest,
 ) -> Result<(), String> {
-        
+    println!("接收到 StateRequest 消息");
 
     Ok(())
 }
@@ -485,7 +485,7 @@ pub async fn state_response_handler(
     reset_sender: mpsc::Sender<()>,
     state_response: StateResponse,
 ) -> Result<(), String> {
-        
+    println!("接收到 StateReply 消息");
 
     Ok(())
 }
@@ -498,7 +498,7 @@ pub async fn sync_request_handler(
     reset_sender: mpsc::Sender<()>,
     sync_request: SyncRequest,
 ) -> Result<(), String> {
-        
+    println!("接收到 SyncRequest 消息");
 
     Ok(())
 }
@@ -511,7 +511,7 @@ pub async fn sync_response_handler(
     reset_sender: mpsc::Sender<()>,
     sync_response: SyncResponse,
 ) -> Result<(), String> {
-        
+    println!("接收到 SyncResponse 消息");
 
     Ok(())
 }

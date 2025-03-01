@@ -54,10 +54,6 @@ impl ConstantConfig {
 #[derive(Deserialize)]
 pub struct VariableConfig {
     pub view_number: u64,
-    pub database_name: String,
-    pub multi_cast_ip: String,
-    pub multi_cast_port: u64,
-    pub block_size: u64,
 }
 impl VariableConfig {
     /// 从文件加载动态配置

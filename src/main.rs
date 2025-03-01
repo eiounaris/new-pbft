@@ -19,11 +19,10 @@ async fn main() -> Result<(), String> {
             // 视图请求
             tokio::spawn({
                 let constant_config = constant_config.clone();
-                let variable_config = variable_config.clone();
                 let client = client.clone();
                 let pbft = pbft.clone();
                 async move {
-                    if let Err(e) = new_pbft::view_request(constant_config, variable_config, client, pbft).await {
+                    if let Err(e) = new_pbft::view_request(constant_config, client, pbft).await {
                         eprintln!("{e:?}");
                     }
                 }

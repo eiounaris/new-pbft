@@ -38,37 +38,57 @@ use std::net::SocketAddr;
 
 
 /// PBFT 初始化函数（fine）
-pub async fn init() -> Result<(Arc<ConstantConfig>, Arc<RwLock<VariableConfig>>, Arc<Client>, Arc<RwLock<State>>, Arc<RwLock<Pbft>>, tokio::sync::mpsc::Sender<()>, tokio::sync::mpsc::Receiver<()>), String> {
+pub async fn init() -> Result<(
+    Arc<ConstantConfig>, 
+    Arc<RwLock<VariableConfig>>, 
+    Arc<Client>, Arc<RwLock<State>>, 
+    Arc<RwLock<Pbft>>, 
+    tokio::sync::mpsc::Sender<()>, 
+    tokio::sync::mpsc::Receiver<()>
+), String> {
     // 加载环境变量
     dotenv().ok();
-    let local_node_id = env::var("local_node_id").map_err(|e| e.to_string())?.parse::<u64>().map_err(|e| e.to_string())?;
-    let identity_config_path = env::var("identity_config_path").map_err(|e| e.to_string())?;
-    let constant_config_path = env::var("constant_config_path").map_err(|e| e.to_string())?;
-    let variable_config_path = env::var("variable_config_path").map_err(|e| e.to_string())?;
-    let private_key_path = env::var("private_key_path").map_err(|e| e.to_string())?;
-    let public_key_path = env::var("public_key_path").map_err(|e| e.to_string())?;
+    let local_node_id = env::var("local_node_id")
+        .map_err(|e| e.to_string())?
+        .parse::<u64>()
+        .map_err(|e| e.to_string())?;
+    let identity_config_path = env::var("identity_config_path")
+        .map_err(|e| e.to_string())?;
+    let constant_config_path = env::var("constant_config_path")
+        .map_err(|e| e.to_string())?;
+    let variable_config_path = env::var("variable_config_path")
+        .map_err(|e| e.to_string())?;
+    let private_key_path = env::var("private_key_path")
+        .map_err(|e| e.to_string())?;
+    let public_key_path = env::var("public_key_path")
+        .map_err(|e| e.to_string())?;
     // 加载初始信息
     let identities = Identity::load_identity_config(identity_config_path).await?;
     let constant_config = ConstantConfig::load_constant_config(constant_config_path).await?;
     let variable_config = VariableConfig::load_variable_config(variable_config_path).await?;
     let private_key = load_private_key(&private_key_path).await?;
     let public_key = load_public_key(&public_key_path).await?;
-    let local_identitiy = identities.iter().find(|identity| identity.node_id == local_node_id).unwrap_or(&identities[0]);
+    let local_identitiy = identities.iter()
+        .find(|identity| identity.node_id == local_node_id)
+        .ok_or("节点身份文件缺失当前节点信息！！！")?;
     // 创建广播套接字
-    let udp_socket = UdpSocket::bind(format!("{}:{}", "0.0.0.0", constant_config.multi_cast_port)).await.map_err(|e| e.to_string())?;
-    let multicast_addr = Ipv4Addr::from_str(&constant_config.multi_cast_ip).map_err(|e| e.to_string())?;
+    let udp_socket = UdpSocket::bind(format!("{}:{}", "0.0.0.0", constant_config.multi_cast_port)).await
+        .map_err(|e| e.to_string())?;
+    let multicast_addr = Ipv4Addr::from_str(&constant_config.multi_cast_ip)
+        .map_err(|e| e.to_string())?;
     let interface  = Ipv4Addr::new(0,0,0,0);
-    udp_socket.join_multicast_v4(multicast_addr, interface ).map_err(|e| e.to_string())?;
-    udp_socket.set_multicast_loop_v4(false).map_err(|e| e.to_string())?;
-    let udp_socket = Arc::new(udp_socket);
+    udp_socket.join_multicast_v4(multicast_addr, interface )
+        .map_err(|e| e.to_string())?;
+    udp_socket.set_multicast_loop_v4(false)
+        .map_err(|e| e.to_string())?;
     // 输出本地节点初始化信息
     println!("本地节点 {} 启动，地址：{}", local_node_id, format!("{}:{}", local_identitiy.ip, local_identitiy.port));
     // 创建 client
-    let client = Client::new(local_node_id, udp_socket.clone(), private_key, public_key, identities);
+    let client = Client::new(local_node_id, udp_socket, private_key, public_key, identities);
     // 创建 state
     let state = State::new(&constant_config.database_name)?;
     // 创建 pbft
-    let pbft = Pbft::new(variable_config.view_number, state.rocksdb.get_last_block()?.unwrap().index);
+    let pbft = Pbft::new(variable_config.view_number, state.rocksdb.get_last_block()?.ok_or("缺失创世区块！！！")?.index);
     // 创建 channel
     let (reset_sender, reset_receiver) = tokio::sync::mpsc::channel(1);
     // 返回初始化信息
@@ -77,7 +97,11 @@ pub async fn init() -> Result<(Arc<ConstantConfig>, Arc<RwLock<VariableConfig>>,
 
 
 /// 任务: 发送命令行指令数据，用于测试tps（待修改为高性能 Restful API 供本机用户调用）
-pub async fn send_message(constant_config: Arc<ConstantConfig>, client: Arc<Client>, state: Arc<RwLock<State>>) -> Result<(), std::string::String> {
+pub async fn send_message(
+    constant_config: Arc<ConstantConfig>, 
+    client: Arc<Client>, 
+    state: Arc<RwLock<State>>
+) -> Result<(), std::string::String> {
     let stdin = tokio::io::stdin();
     let reader = tokio::io::BufReader::new(stdin);
     let mut lines = reader.lines();
@@ -93,8 +117,11 @@ pub async fn send_message(constant_config: Arc<ConstantConfig>, client: Arc<Clie
             signature: Vec::new(),
         };
         sign_request(&client.private_key, &mut request)?;
-        let multicast_addr = constant_config.multi_cast_addr.parse::<SocketAddr>().map_err(|e| e.to_string())?;
-        let content: Vec<u8> = bincode::serialize(&request).map_err(|e| e.to_string())?;
+        let multicast_addr = constant_config.multi_cast_addr
+            .parse::<SocketAddr>()
+            .map_err(|e| e.to_string())?;
+        let content: Vec<u8> = bincode::serialize(&request)
+            .map_err(|e| e.to_string())?;
 
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() == 3 && parts[0] == "test" {
@@ -151,7 +178,9 @@ pub async fn handle_message(
 ) -> Result<(), String> {
     let mut buf = Box::new([0u8; 102400]);
     loop {
-        let (udp_data_size, src_socket_addr) = client.local_udp_socket.recv_from(buf.as_mut_slice()).await.map_err(|e| e.to_string())?;
+        let (udp_data_size, src_socket_addr) = client.local_udp_socket
+            .recv_from(buf.as_mut_slice()).await
+            .map_err(|e| e.to_string())?;
         // 提取消息类型（第一个字节）
         let message_type = match buf[0] {
             0 => MessageType::Request,
@@ -254,7 +283,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::Reply => {
-                println!("接收到 Reply 消息");
                 if let Ok(reply) = bincode::deserialize::<Reply>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
@@ -289,7 +317,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::ViewChange => {
-                println!("接收到 ViewChange 消息");
                 if let Ok(view_change) = bincode::deserialize::<ViewChange>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
@@ -307,7 +334,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::NewView => {
-                println!("接收到 NewView 消息");
                 if let Ok(new_view) = bincode::deserialize::<NewView>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
@@ -325,7 +351,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::ViewRequest => {
-                println!("接收到 ViewRequest 消息");
                 if let Ok(view_request) = bincode::deserialize::<ViewRequest>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
@@ -343,7 +368,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::ViewResponse => {
-                println!("接收到 ViewResponse 消息");
                 if let Ok(view_response) = bincode::deserialize::<ViewResponse>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
@@ -361,7 +385,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::StateRequest => {
-                println!("接收到 StateRequest 消息");
                 if let Ok(state_request) = bincode::deserialize::<StateRequest>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
@@ -379,7 +402,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::StateResponse => {
-                println!("接收到 StateReply 消息");
                 if let Ok(state_response) = bincode::deserialize::<StateResponse>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
@@ -397,7 +419,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::SyncRequest => {
-                println!("接收到 SyncRequest 消息");
                 if let Ok(sync_request) = bincode::deserialize::<SyncRequest>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
@@ -415,7 +436,6 @@ pub async fn handle_message(
                 }
             },
             MessageType::SyncResponse => {
-                println!("接收到 SyncResponse 消息");
                 if let Ok(sync_response) = bincode::deserialize::<SyncResponse>(content).map_err(|e| e.to_string()) {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
@@ -502,7 +522,6 @@ pub async fn view_change(
 // 节点启动，获取视图编号（fine）
 pub async fn view_request (
     constant_config : Arc<ConstantConfig>,
-    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     pbft: Arc<RwLock<Pbft>>,
 ) -> Result<(), String> {

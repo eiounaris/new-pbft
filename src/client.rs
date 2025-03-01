@@ -3,24 +3,20 @@ use crate::config::Identity;
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use tokio::net::UdpSocket;
 
-use std::sync::Arc;
-
-
 /// 节点运行信息
 pub struct Client {
     pub local_node_id: u64,
-    pub local_udp_socket: Arc<UdpSocket>,
+    pub local_udp_socket: UdpSocket,
     pub private_key: RsaPrivateKey,
     pub public_key: RsaPublicKey,
     pub identities: Vec<Identity>,
     pub nodes_number: u64,
-
 }
 impl Client {
     /// 初始化构造函数
     pub fn new(
         local_node_id: u64,
-        local_udp_socket: Arc<UdpSocket>,
+        local_udp_socket: UdpSocket,
         private_key: RsaPrivateKey,
         public_key: RsaPublicKey,
         identities: Vec<Identity>,
