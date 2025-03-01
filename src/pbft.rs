@@ -4,7 +4,7 @@ use crate::utils::get_current_timestamp;
 use std::collections::{HashMap, HashSet};
 
 /// PBFT 共识过程（待调整）
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Step {
     ReceivingViewResponse = 0,
     ReceivingStateResponse = 1,
