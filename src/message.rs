@@ -192,21 +192,47 @@ pub async fn request_handler(
                         eprintln!("缓冲已满");
                     }
                 }
-                
+
+                // {
+                //     let pbft_read = pbft.read().await;
+                //     if (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft_read.start_time > 1) { // 硬编码共识超时时间
+                //         drop(pbft_read);
+                //         let mut pbft_write = pbft.write().await;
+                //         pbft_write.step = Step::OK;
+                //     }
+                // }
+
                 {
-                    if (pbft.read().await.step == Step::ReceivingPrepare || pbft.read().await.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft.read().await.start_time > 1) {
+                    // 第一次检查（读锁）
+                    let need_update = {
+                        let pbft_read = pbft.read().await;
+                        (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceiveingCommit)
+                            && (get_current_timestamp().unwrap() - pbft_read.start_time > 1)
+                    };
+                
+                    if need_update {
+                        // 第二次检查（写锁，原子性）
                         let mut pbft_write = pbft.write().await;
-                        pbft_write.step = Step::OK;
+                        if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
+                            && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
+                        {
+                            pbft_write.step = Step::OK;
+                        }
                     }
                 }
-
-
-                let state_read = state.read().await;
-                if !(pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize)) {
-                    return Ok(());
-                }
+                
+               
                 let content = {
+                    let state_read = state.read().await;
+                    // 第一次检查（读锁）
+                    if !(pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize)) {
+                        return Ok(());
+                    }
                     let mut pbft_write = pbft.write().await;
+                    // 第二次检查（写锁，原子性）
+                    if !(pbft_write.step == Step::OK) {
+                        return Ok(());
+                    }
                     pbft_write.step = Step::ReceivingPrepare;
                     pbft_write.start_time = get_current_timestamp().unwrap();
                     pbft_write.prepares.clear();
@@ -257,18 +283,42 @@ pub async fn preprepare_handler(
             println!("接收 PrePrepare 消息");
             reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
 
+            // {
+            //     if (pbft.read().await.step == Step::ReceivingPrepare || pbft.read().await.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft.read().await.start_time > 1) {
+            //         let mut pbft_write = pbft.write().await;
+            //         pbft_write.step = Step::OK;
+            //     }
+            // }
+
             {
-                if (pbft.read().await.step == Step::ReceivingPrepare || pbft.read().await.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft.read().await.start_time > 1) {
+                // 第一次检查（读锁）
+                let need_update = {
+                    let pbft_read = pbft.read().await;
+                    (pbft_read.step == Step::ReceivingPrepare || pbft_read.step == Step::ReceiveingCommit)
+                        && (get_current_timestamp().unwrap() - pbft_read.start_time > 1)
+                };
+            
+                if need_update {
+                    // 第二次检查（写锁，原子性）
                     let mut pbft_write = pbft.write().await;
-                    pbft_write.step = Step::OK;
+                    if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
+                        && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
+                    {
+                        pbft_write.step = Step::OK;
+                    }
                 }
             }
 
-            if pbft.read().await.step != Step::OK {
-                return Ok(())
-            }
             let content = {
+                // 第一次检查（读锁）
+                if pbft.read().await.step != Step::OK {
+                    return Ok(());
+                }
                 let mut pbft_write = pbft.write().await;
+                // 第二次检查（写锁，原子性）
+                if pbft_write.step != Step::OK {
+                    return Ok(());
+                }
                 pbft_write.step = Step::ReceivingPrepare;
                 pbft_write.start_time = get_current_timestamp().unwrap();
                 pbft_write.preprepare = Some(preprepare.clone());
@@ -312,11 +362,11 @@ pub async fn prepare_handler(
     if verify_prepare(&client.identities[prepare.node_id as usize].public_key, &mut prepare)? {
         println!("接收 Prepare 消息");
 
-        if pbft.read().await.step != Step::ReceivingPrepare || pbft.read().await.prepares.contains(&prepare.node_id) {
+        let mut pbft_write = pbft.write().await;
+        if pbft_write.step != Step::ReceivingPrepare || pbft_write.prepares.contains(&prepare.node_id) {
             return Ok(())
         }
         let content = {
-            let mut pbft_write = pbft.write().await;
             pbft_write.prepares.insert(prepare.node_id);
 
             if pbft_write.prepares.len() < 2 * ((client.identities.len() - 1) / 3) {
@@ -358,15 +408,16 @@ pub async fn commit_handler(
     if verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? {
         println!("接收 Commit 消息");
 
-        if pbft.read().await.step != Step::ReceiveingCommit && pbft.read().await.commits.contains(&commit.node_id) {
+        let mut pbft_write: tokio::sync::RwLockWriteGuard<'_, Pbft> = pbft.write().await;
+        if pbft_write.step != Step::ReceiveingCommit && pbft_write.commits.contains(&commit.node_id) {
             return Ok(())
         }
-        let mut pbft_write = pbft.write().await;
         pbft_write.commits.insert(commit.node_id);
 
         if pbft_write.commits.len() < 2 * ((client.identities.len() - 1) / 3) + 1 {
             return Ok(())
         }
+        pbft_write.step = Step::OK;
         println!("至少 2f + 1 个节点达成共识");
         pbft_write.sequence_number += 1;
         let block = pbft_write.preprepare.clone().unwrap().block;
@@ -374,7 +425,7 @@ pub async fn commit_handler(
         if client.is_primarry(system_config.view_number) {
             state.write().await.request_buffer.drain(0..block.transactions.len());
         }
-        pbft_write.step = Step::OK;
+        
     }
 
     Ok(())
