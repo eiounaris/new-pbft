@@ -88,7 +88,7 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
         }
         let mut request = Request {
             transaction: Transaction::Tx0,
-            timestamp: get_current_timestamp(),
+            timestamp: get_current_timestamp().unwrap(),
             node_id: client.local_node_id,
             signature: Vec::new(),
         };

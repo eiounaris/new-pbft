@@ -41,7 +41,7 @@ impl Pbft {
             sended_view_number: view_number,
             sequence_number: sequence_number,
             step: Step::ReceivingViewResponse,
-            start_time: get_current_timestamp(),
+            start_time: get_current_timestamp().unwrap(),
             nodes_number: nodes_number,
             preprepare: None,
             prepares: HashSet::new(),

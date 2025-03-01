@@ -48,7 +48,7 @@ impl RocksDBBlockStore {
         if let None = db.get(last_block_index_key)? {
             let genesis_block = Block {
                 index: 0,
-                timestamp: get_current_timestamp(),
+                timestamp: get_current_timestamp().unwrap(),
                 transactions: Vec::new(),
                 previous_hash: "genesis".to_string(),
                 hash: "genesis".to_string(),
@@ -127,9 +127,9 @@ impl BlockStore for RocksDBBlockStore {
         if let Ok(Some(last_block)) = self.get_last_block() {
             // 生成新区块
             let index = last_block.index + 1;
-            let timestamp = get_current_timestamp();
+            let timestamp = get_current_timestamp().unwrap();
             let previous_hash = last_block.hash;
-            let hash = calculate_block_hash(index, timestamp, transactions, &previous_hash);
+            let hash = calculate_block_hash(index, timestamp, transactions, &previous_hash).unwrap();
         
             let new_block = Block {
                 index,

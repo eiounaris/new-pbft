@@ -2,7 +2,7 @@ use crate::message::*;
 
 
 use rsa::{pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey}, Pkcs1v15Sign, RsaPrivateKey, RsaPublicKey};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use tokio::fs::read_to_string;
 
 
@@ -28,8 +28,11 @@ fn sign_data(private_key: &RsaPrivateKey, data: &[u8]) -> Result<Vec<u8>, String
 /// 使用公钥验证签名
 fn verify_signature(pub_key: &RsaPublicKey, data: &[u8], signature: &[u8]) -> Result<bool, String> {
     let hashed_data = Sha256::digest(data);
-    pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &signature[..]).map_err(|e| e.to_string())?;
-    Ok(true)
+    if let Ok(_) = pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &signature) {
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 /// 签名请求消息
@@ -42,15 +45,9 @@ pub fn sign_request(priv_key: &RsaPrivateKey, request: &mut Request) -> Result<(
 pub fn verify_request(pub_key: &RsaPublicKey, request: &mut Request) -> Result<bool, String> {
     let signature = request.signature.clone();
     request.signature = Vec::new();
-    let hashed_data = Sha256::digest(&bincode::serialize(&request).map_err(|e| e.to_string())?);
+    let bincode_data = &bincode::serialize(&request).map_err(|e| e.to_string())?;
     request.signature = signature;
-    match pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &request.signature[..]).map_err(|e| e.to_string()) {
-        Ok(_) => return Ok(true),
-        Err(e) => {
-            eprintln!("{e:?}");
-            Ok(false)
-        }
-    }
+    verify_signature(pub_key, &bincode_data, &request.signature)
 }
 
 /// 签名预准备消息
@@ -63,15 +60,9 @@ pub fn sign_preprepare(priv_key: &RsaPrivateKey, preprepare: &mut PrePrepare) ->
 pub fn verify_preprepare(pub_key: &RsaPublicKey, preprepare: &mut PrePrepare) -> Result<bool, String> {
     let signature = preprepare.signature.clone();
     preprepare.signature = Vec::new();
-    let hashed_data = Sha256::digest(&bincode::serialize(&preprepare).map_err(|e| e.to_string())?);
+    let bincode_data = &bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
     preprepare.signature = signature;
-    match pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &preprepare.signature[..]).map_err(|e| e.to_string()) {
-        Ok(_) => return Ok(true),
-        Err(e) => {
-            eprintln!("{e:?}");
-            Ok(false)
-        }
-    }
+    verify_signature(pub_key, &bincode_data, &preprepare.signature)
 }
 
 /// 签名准备消息
@@ -83,15 +74,9 @@ pub fn sign_prepare(priv_key: &RsaPrivateKey, prepare: &mut Prepare) -> Result<(
 pub fn verify_prepare(pub_key: &RsaPublicKey, prepare: &mut Prepare) -> Result<bool, String> {
     let signature = prepare.signature.clone();
     prepare.signature = Vec::new();
-    let hashed_data = Sha256::digest(&bincode::serialize(&prepare).map_err(|e| e.to_string())?);
+    let bincode_data = &bincode::serialize(&prepare).map_err(|e| e.to_string())?;
     prepare.signature = signature;
-    match pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &prepare.signature[..]).map_err(|e| e.to_string()) {
-        Ok(_) => return Ok(true),
-        Err(e) => {
-            eprintln!("{e:?}");
-            Ok(false)
-        }
-    }
+    verify_signature(pub_key, &bincode_data, &prepare.signature)
 }
 
 /// 签名提交消息
@@ -103,15 +88,9 @@ pub fn sign_commit(priv_key: &RsaPrivateKey, commit: &mut Commit) -> Result<(), 
 pub fn verify_commit(pub_key: &RsaPublicKey, commit: &mut Commit) -> Result<bool, String> {
     let signature = commit.signature.clone();
     commit.signature = Vec::new();
-    let hashed_data = Sha256::digest(&bincode::serialize(&commit).map_err(|e| e.to_string())?);
+    let bincode_data = &bincode::serialize(&commit).map_err(|e| e.to_string())?;
     commit.signature = signature;
-    match pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &commit.signature[..]).map_err(|e| e.to_string()) {
-        Ok(_) => return Ok(true),
-        Err(e) => {
-            eprintln!("{e:?}");
-            Ok(false)
-        }
-    }
+    verify_signature(pub_key, &bincode_data, &commit.signature)
 }
 
 /// 签名心跳消息
@@ -123,15 +102,9 @@ pub fn sign_heartbeat(priv_key: &RsaPrivateKey, hearbeat: &mut Hearbeat) -> Resu
 pub fn verify_heartbeat(pub_key: &RsaPublicKey, hearbeat: &mut Hearbeat) -> Result<bool, String> {
     let signature = hearbeat.signature.clone();
     hearbeat.signature = Vec::new();
-    let hashed_data = Sha256::digest(&bincode::serialize(&hearbeat).map_err(|e| e.to_string())?);
+    let bincode_data = &bincode::serialize(&hearbeat).map_err(|e| e.to_string())?;
     hearbeat.signature = signature;
-    match pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &hearbeat.signature[..]).map_err(|e| e.to_string()) {
-        Ok(_) => return Ok(true),
-        Err(e) => {
-            eprintln!("{e:?}");
-            Ok(false)
-        }
-    }
+    verify_signature(pub_key, &bincode_data, &hearbeat.signature)
 }
 
 /// 签名试图切换消息
@@ -143,15 +116,9 @@ pub fn sign_view_change(priv_key: &RsaPrivateKey, view_change: &mut ViewChange) 
 pub fn verify_view_change(pub_key: &RsaPublicKey, view_change: &mut ViewChange) -> Result<bool, String> {
     let signature = view_change.signature.clone();
     view_change.signature = Vec::new();
-    let hashed_data = Sha256::digest(&bincode::serialize(&view_change).map_err(|e| e.to_string())?);
+    let bincode_data = &bincode::serialize(&view_change).map_err(|e| e.to_string())?;
     view_change.signature = signature;
-    match pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &view_change.signature[..]).map_err(|e| e.to_string()) {
-        Ok(_) => return Ok(true),
-        Err(e) => {
-            eprintln!("{e:?}");
-            Ok(false)
-        }
-    }
+    verify_signature(pub_key, &bincode_data, &view_change.signature)
 }
 
 /// 签名新视图消息
@@ -163,13 +130,7 @@ pub fn sign_new_view(priv_key: &RsaPrivateKey, new_view: &mut NewView) -> Result
 pub fn verify_new_view(pub_key: &RsaPublicKey, new_view: &mut NewView) -> Result<bool, String> {
     let signature = new_view.signature.clone();
     new_view.signature = Vec::new();
-    let hashed_data = Sha256::digest(&bincode::serialize(&new_view).map_err(|e| e.to_string())?);
+    let bincode_data = &bincode::serialize(&new_view).map_err(|e| e.to_string())?;
     new_view.signature = signature;
-    match pub_key.verify(Pkcs1v15Sign::new::<Sha256>(), &hashed_data, &new_view.signature[..]).map_err(|e| e.to_string()) {
-        Ok(_) => return Ok(true),
-        Err(e) => {
-            eprintln!("{e:?}");
-            Ok(false)
-        }
-    }
+    verify_signature(pub_key, &bincode_data, &new_view.signature)
 }

@@ -195,7 +195,7 @@ pub async fn request_handler(
                 
                 {
                     let mut pbft_write = pbft.write().await;
-                    if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit) && (get_current_timestamp() - pbft_write.start_time > 1) {
+                    if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
                         pbft_write.step = Step::OK;
                     }
                 }
@@ -204,7 +204,7 @@ pub async fn request_handler(
                 if pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
                     let mut pbft_write = pbft.write().await;
                     pbft_write.step = Step::ReceivingPrepare;
-                    pbft_write.start_time = get_current_timestamp();
+                    pbft_write.start_time = get_current_timestamp().unwrap();
                     pbft_write.prepares.clear();
                     pbft_write.commits.clear();
                     
@@ -250,7 +250,7 @@ pub async fn preprepare_handler(
 
             {
                 let mut pbft_write = pbft.write().await;
-                if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit) && (get_current_timestamp() - pbft_write.start_time > 1) {
+                if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
                     pbft_write.step = Step::OK;
                 }
             }
@@ -258,7 +258,7 @@ pub async fn preprepare_handler(
             if pbft.read().await.step == Step::OK {
                 let mut pbft_write = pbft.write().await;
                 pbft_write.step = Step::ReceivingPrepare;
-                pbft_write.start_time = get_current_timestamp();
+                pbft_write.start_time = get_current_timestamp().unwrap();
                 pbft_write.preprepare = Some(preprepare.clone());
                 pbft_write.prepares.clear();
                 pbft_write.commits.clear();
