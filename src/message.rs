@@ -185,7 +185,7 @@ pub async fn request_handler(
 
                 {
                     let mut state_write = state.write().await;
-                    if state_write.request_buffer.len() < 2 * (system_config.block_size as usize) {
+                    if state_write.request_buffer.len() < 3 * (system_config.block_size as usize) {
                         state_write.add_request(request);
                         println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
                     } else {
@@ -194,18 +194,18 @@ pub async fn request_handler(
                 }
                 
                 {
-                    let mut pbft_write = pbft.write().await;
-                    if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
+                    if (pbft.read().await.step == Step::ReceivingPrepare || pbft.read().await.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft.read().await.start_time > 1) {
+                        let mut pbft_write = pbft.write().await;
                         pbft_write.step = Step::OK;
                     }
                 }
 
-                // 准备 PrePrepare 消息
-                let (preprepare, multicast_addr, content) = {
-                    let state_read = state.read().await;
-                    if !(pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize)) {
-                        return Ok(());
-                    }
+
+                let state_read = state.read().await;
+                if !(pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize)) {
+                    return Ok(());
+                }
+                let content = {
                     let mut pbft_write = pbft.write().await;
                     pbft_write.step = Step::ReceivingPrepare;
                     pbft_write.start_time = get_current_timestamp().unwrap();
@@ -229,47 +229,15 @@ pub async fn request_handler(
                     sign_preprepare(&client.private_key, &mut preprepare)?;
                     pbft_write.preprepare = Some(preprepare.clone());
 
-                    let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port)
-                        .parse::<SocketAddr>()
-                        .map_err(|e| e.to_string())?;
                     let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
+                    content
+                };
 
-                    (preprepare, multicast_addr, content)
-                }; // 锁在此释放
-
-                // 异步发送（无锁）
                 println!("发送 PrePrepare 消息");
+                let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port)
+                    .parse::<SocketAddr>()
+                    .map_err(|e| e.to_string())?;
                 send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
-
-                // let state_read = state.read().await;
-                // if pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
-                //     let mut pbft_write = pbft.write().await;
-                //     pbft_write.step = Step::ReceivingPrepare;
-                //     pbft_write.start_time = get_current_timestamp().unwrap();
-                //     pbft_write.prepares.clear();
-                //     pbft_write.commits.clear();
-                    
-                //     let transactions = state_read.request_buffer.iter()
-                //     .map(|req| req.transaction.clone())
-                //     .collect();
-
-                //     let mut preprepare = PrePrepare {
-                //         view_number: pbft_write.view_number,
-                //         sequence_number: pbft_write.sequence_number,
-                //         digest: Request::digest_requests(&state_read.request_buffer)?,
-                //         node_id: client.local_node_id,
-                //         signature: Vec::new(),
-                //         requests: state_read.request_buffer.clone(),
-                //         block: state_read.rocksdb.create_block(&transactions)?,
-                //     };
-                //     sign_preprepare(&client.private_key, &mut preprepare)?;
-                //     pbft_write.preprepare = Some(preprepare.clone());
-
-                //     println!("发送 PrePrepare 消息");
-                //     let multicast_addr: SocketAddr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
-                //     let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
-                //     send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
-                // }
             }
         }
 
@@ -290,13 +258,16 @@ pub async fn preprepare_handler(
             reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
 
             {
-                let mut pbft_write = pbft.write().await;
-                if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
+                if (pbft.read().await.step == Step::ReceivingPrepare || pbft.read().await.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft.read().await.start_time > 1) {
+                    let mut pbft_write = pbft.write().await;
                     pbft_write.step = Step::OK;
                 }
             }
 
-            if pbft.read().await.step == Step::OK {
+            if pbft.read().await.step != Step::OK {
+                return Ok(())
+            }
+            let content = {
                 let mut pbft_write = pbft.write().await;
                 pbft_write.step = Step::ReceivingPrepare;
                 pbft_write.start_time = get_current_timestamp().unwrap();
@@ -304,7 +275,6 @@ pub async fn preprepare_handler(
                 pbft_write.prepares.clear();
                 pbft_write.commits.clear();
                 
-
                 let mut prepare = Prepare {
                     view_number: pbft_write.view_number,
                     sequence_number: pbft_write.sequence_number,
@@ -313,17 +283,20 @@ pub async fn preprepare_handler(
                     signature: Vec::new(),
                 };
                 sign_prepare(&client.private_key, &mut prepare)?;
-
-                println!("发送 Prepare 消息");
-                let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
-                let content = bincode::serialize(&prepare).map_err(|e| e.to_string())?;
-                send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Prepare, &content).await;
-
                 pbft_write.prepares.insert(client.local_node_id);
-            }
+
+                
+                let content = bincode::serialize(&prepare).map_err(|e| e.to_string())?;
+                content
+            };
+
+            println!("发送 Prepare 消息");
+            let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port)
+                .parse::<SocketAddr>()
+                .map_err(|e| e.to_string())?;
+            send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Prepare, &content).await;
         }
     }
-
 
     Ok(())
 }
@@ -339,30 +312,37 @@ pub async fn prepare_handler(
     if verify_prepare(&client.identities[prepare.node_id as usize].public_key, &mut prepare)? {
         println!("接收 Prepare 消息");
 
-        if pbft.read().await.step == Step::ReceivingPrepare && !pbft.read().await.prepares.contains(&prepare.node_id) {
+        if pbft.read().await.step != Step::ReceivingPrepare || pbft.read().await.prepares.contains(&prepare.node_id) {
+            return Ok(())
+        }
+        let content = {
             let mut pbft_write = pbft.write().await;
             pbft_write.prepares.insert(prepare.node_id);
 
-            if pbft_write.prepares.len() as u64 >= 2 * ((client.identities.len() - 1) as u64 / 3u64) {
-                pbft_write.step = Step::ReceiveingCommit;
-                
-                let mut commit = Commit {
-                    view_number: pbft_write.view_number,
-                    sequence_number: pbft_write.sequence_number,
-                    digest: prepare.digest,
-                    node_id: client.local_node_id,
-                    signature: Vec::new(),
-                };
-                sign_commit(&client.private_key, &mut commit)?;
-
-                println!("发送 Commit 消息");
-                let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
-                let content = bincode::serialize(&commit).map_err(|e| e.to_string())?;
-                send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Commit, &content).await;
-
-                pbft_write.commits.insert(client.local_node_id);
+            if pbft_write.prepares.len() < 2 * ((client.identities.len() - 1) / 3) {
+                return Ok(())
             }
-        }
+            pbft_write.step = Step::ReceiveingCommit;
+                
+            let mut commit = Commit {
+                view_number: pbft_write.view_number,
+                sequence_number: pbft_write.sequence_number,
+                digest: prepare.digest,
+                node_id: client.local_node_id,
+                signature: Vec::new(),
+            };
+            sign_commit(&client.private_key, &mut commit)?;
+            pbft_write.commits.insert(client.local_node_id);
+            
+            let content = bincode::serialize(&commit).map_err(|e| e.to_string())?;
+            content
+        };
+
+        println!("发送 Commit 消息");
+        let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port)
+            .parse::<SocketAddr>()
+            .map_err(|e| e.to_string())?;
+        send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Commit, &content).await;
     }
 
     Ok(())
@@ -375,23 +355,26 @@ pub async fn commit_handler(
     reset_sender: mpsc::Sender<()>,
     mut commit: Commit,
 ) -> Result<(), String> {
-    if pbft.read().await.step == Step::ReceiveingCommit && !pbft.read().await.commits.contains(&commit.node_id) && verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? {
+    if verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? {
         println!("接收 Commit 消息");
+
+        if pbft.read().await.step != Step::ReceiveingCommit && pbft.read().await.commits.contains(&commit.node_id) {
+            return Ok(())
+        }
         let mut pbft_write = pbft.write().await;
         pbft_write.commits.insert(commit.node_id);
 
-        if pbft_write.commits.len() as u64 >= 2 * ((client.identities.len() - 1) as u64 / 3u64) + 1 {
-            println!("至少 2f + 1 个节点达成共识");
-            pbft_write.sequence_number += 1;
-            let state_read = state.read().await;
-            let block = pbft_write.preprepare.clone().unwrap().block;
-            state_read.rocksdb.put_block(&block)?;
-            if client.is_primarry(system_config.view_number) {
-                drop(state_read);
-                state.write().await.request_buffer.drain(0..block.transactions.len());
-            }
-            pbft_write.step = Step::OK;
+        if pbft_write.commits.len() < 2 * ((client.identities.len() - 1) / 3) + 1 {
+            return Ok(())
         }
+        println!("至少 2f + 1 个节点达成共识");
+        pbft_write.sequence_number += 1;
+        let block = pbft_write.preprepare.clone().unwrap().block;
+        state.read().await.rocksdb.put_block(&block)?;
+        if client.is_primarry(system_config.view_number) {
+            state.write().await.request_buffer.drain(0..block.transactions.len());
+        }
+        pbft_write.step = Step::OK;
     }
 
     Ok(())
