@@ -46,7 +46,6 @@ pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<RwLock<State>
     let system_config_path = env::var("system_config_path").map_err(|e| e.to_string())?;
     let private_key_path = env::var("private_key_path").map_err(|e| e.to_string())?;
     let public_key_path = env::var("public_key_path").map_err(|e| e.to_string())?;
-    println!("{local_node_id:?}, {identity_config_path:?}, {system_config_path:?}, {private_key_path:?}, {public_key_path:?}");
     // 加载初始信息
     let identities = Identity::load_identity_config(identity_config_path).await?;
     let system_config = SystemConfig::load_system_config(system_config_path).await?;
@@ -55,8 +54,7 @@ pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<RwLock<State>
     let local_identitiy = identities.iter().find(|identity| identity.node_id == local_node_id).unwrap_or(&identities[0]);
     // 创建广播套接字
     let udp_socket = UdpSocket::bind(format!("{}:{}", "0.0.0.0", system_config.multi_cast_port)).await.map_err(|e| e.to_string())?;
-    // let multicast_addr = Ipv4Addr::from_str(&system_config.multi_cast_ip).map_err(|e| e.to_string())?;
-    let multicast_addr = Ipv4Addr::from_str(&system_config.multi_cast_ip).unwrap();
+    let multicast_addr = Ipv4Addr::from_str(&system_config.multi_cast_ip).map_err(|e| e.to_string())?;
     let interface  = Ipv4Addr::new(0,0,0,0);
     udp_socket.join_multicast_v4(multicast_addr, interface ).map_err(|e| e.to_string())?;
     udp_socket.set_multicast_loop_v4(false).map_err(|e| e.to_string())?;
@@ -69,9 +67,9 @@ pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<RwLock<State>
     let state = State::new(&system_config.database_name)?;
     // 创建 pbft
     let pbft = Pbft::new(system_config.view_number, state.rocksdb.get_last_block()?.unwrap().index);
-    // 创建一个通道用于发送重置信号
+    // 创建 channel
     let (reset_sender, reset_receiver) = tokio::sync::mpsc::channel(1);
-
+    // 返回初始化信息
     Ok((Arc::new(system_config), Arc::new(client), Arc::new(RwLock::new(state)), Arc::new(RwLock::new(pbft)), reset_sender, reset_receiver))
 }
 
@@ -95,9 +93,12 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
         sign_request(&client.private_key, &mut request)?;
         let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
         let content: Vec<u8> = bincode::serialize(&request).map_err(|e| e.to_string())?;
-        if line == "test" {
-            let count: u32 = 10000;
-            let interval = Duration::from_micros(300);
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() == 3 && parts[0] == "test" {
+            let Ok(count) = parts[1].parse::<u64>() else { continue };
+            let Ok(interval_us) = parts[2].parse::<u64>() else { continue };
+            let interval = Duration::from_micros(interval_us);
             for i in 0..count {
                 send_udp_data(
                     &client.local_udp_socket,
