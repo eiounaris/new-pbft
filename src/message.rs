@@ -408,8 +408,8 @@ pub async fn commit_handler(
     if verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? {
         println!("接收 Commit 消息");
 
-        let mut pbft_write: tokio::sync::RwLockWriteGuard<'_, Pbft> = pbft.write().await;
-        if pbft_write.step != Step::ReceiveingCommit && pbft_write.commits.contains(&commit.node_id) {
+        let mut pbft_write = pbft.write().await;
+        if pbft_write.step != Step::ReceiveingCommit || pbft_write.commits.contains(&commit.node_id) {
             return Ok(())
         }
         pbft_write.commits.insert(commit.node_id);
