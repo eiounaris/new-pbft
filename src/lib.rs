@@ -48,7 +48,7 @@ pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<RwLock<State>
     let public_key_path = env::var("public_key_path").map_err(|e| e.to_string())?;
     println!("{local_node_id:?}, {identity_config_path:?}, {system_config_path:?}, {private_key_path:?}, {public_key_path:?}");
     // 加载初始信息
-    let identities = Identity::load_identity(identity_config_path).await?;
+    let identities = Identity::load_identity_config(identity_config_path).await?;
     let system_config = SystemConfig::load_system_config(system_config_path).await?;
     let private_key = load_private_key(&private_key_path).await?;
     let public_key = load_public_key(&public_key_path).await?;

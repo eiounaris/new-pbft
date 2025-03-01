@@ -14,7 +14,7 @@ pub struct Identity {
 }
 impl Identity {
     /// 从文件加载节点身份信息
-    pub async  fn load_identity(filepath: String) -> Result<Vec<Identity>, String> {
+    pub async fn load_identity_config(filepath: String) -> Result<Vec<Identity>, String> {
         let identitys_json = read_to_string(filepath).await.map_err(|e| e.to_string())?;
         let identitys: Vec<Identity> = serde_json::from_str(&identitys_json).map_err(|e| e.to_string())?;
         Ok(identitys)
