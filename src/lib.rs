@@ -118,7 +118,7 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>,
                     println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);
                     println!("begin_timestamp: {}, end_timestamp: {}", begin_block.timestamp, end_block.timestamp);
                     println!("blocksize: {}", system_config.block_size);
-                    println!("tps = {}", (end_block.index - begin_block.index) / (end_block.timestamp - begin_block.timestamp) * end_block.transactions.len() as u64);
+                    println!("tps = {}", (end_block.index - begin_block.index) as f64  * end_block.transactions.len() as f64 / (end_block.timestamp - begin_block.timestamp) as f64);
                 }
             }
         } else {
