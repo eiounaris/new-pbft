@@ -180,63 +180,62 @@ pub async fn request_handler(
     reset_sender: mpsc::Sender<()>,
     mut request: Request,
 ) -> Result<(), String> {
-        if client.is_primarry(variable_config.read().await.view_number) {
-            if verify_request(&client.identities[request.node_id as usize].public_key, &mut request)? {
-                println!("接收 Request 消息");
+        if client.is_primarry(variable_config.read().await.view_number) 
+            && verify_request(&client.identities[request.node_id as usize].public_key, &mut request)?
+        {
+            println!("接收 Request 消息");
 
-                let mut state_write = state.write().await;
-                let mut pbft_write = pbft.write().await;
+            let mut state_write = state.write().await;
+            let mut pbft_write = pbft.write().await;
 
-                if state_write.request_buffer.len() < 3 * (constant_config.block_size as usize) {
-                    state_write.add_request(request);
-                    println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
-                } else {
-                    eprintln!("缓冲已满");
-                }
+            if state_write.request_buffer.len() < 3 * (constant_config.block_size as usize) {
+                state_write.add_request(request);
+                println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
+            } else {
+                eprintln!("缓冲已满");
+            }
 
-                println!("{:?}", pbft_write.step);
-                if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
-                    && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
-                {
-                    pbft_write.step = Step::OK;
-                }
-               
-                let content = {
-                    if pbft_write.step != Step::OK || state_write.request_buffer.len() < (constant_config.block_size as usize) {
-                        return Ok(());
-                    }
-                    pbft_write.step = Step::ReceivingPrepare;
-                    pbft_write.start_time = get_current_timestamp().unwrap();
-                    pbft_write.prepares.clear();
-                    pbft_write.commits.clear();
+            if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
+                && (get_current_timestamp().unwrap() - pbft_write.start_time > 1)
+            {
+                pbft_write.step = Step::OK;
+            }
 
-                    let transactions: Vec<_> = state_write.request_buffer.iter()
-                        .map(|req| req.transaction.clone())
-                        .collect();
+            if pbft_write.step != Step::OK || state_write.request_buffer.len() < constant_config.block_size as usize {
+                return Ok(());
+            }
+            let content = {
+                pbft_write.step = Step::ReceivingPrepare;
+                pbft_write.start_time = get_current_timestamp().unwrap();
+                pbft_write.prepares.clear();
+                pbft_write.commits.clear();
 
-                    let mut preprepare = PrePrepare {
-                        view_number: pbft_write.view_number,
-                        sequence_number: pbft_write.sequence_number,
-                        digest: Request::digest_requests(&state_write.request_buffer)?,
-                        node_id: client.local_node_id,
-                        signature: Vec::new(),
-                        requests: state_write.request_buffer.clone(),
-                        block: state_write.rocksdb.create_block(&transactions)?,
-                    };
+                let transactions: Vec<_> = state_write.request_buffer.iter()
+                    .map(|req| req.transaction.clone())
+                    .collect();
 
-                    sign_preprepare(&client.private_key, &mut preprepare)?;
-                    pbft_write.preprepare = Some(preprepare.clone());
-
-                    let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
-                    content
+                let mut preprepare = PrePrepare {
+                    view_number: pbft_write.view_number,
+                    sequence_number: pbft_write.sequence_number,
+                    digest: Request::digest_requests(&state_write.request_buffer)?,
+                    node_id: client.local_node_id,
+                    signature: Vec::new(),
+                    requests: state_write.request_buffer.clone(),
+                    block: state_write.rocksdb.create_block(&transactions)?,
                 };
 
-                println!("发送 PrePrepare 消息");
-                let multicast_addr = constant_config.multi_cast_addr
-                    .parse::<SocketAddr>()
-                    .map_err(|e| e.to_string())?;
-                send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
-            }
+                sign_preprepare(&client.private_key, &mut preprepare)?;
+                pbft_write.preprepare = Some(preprepare.clone());
+
+                let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
+                content
+            };
+
+            println!("发送 PrePrepare 消息");
+            let multicast_addr = constant_config.multi_cast_addr
+                .parse::<SocketAddr>()
+                .map_err(|e| e.to_string())?;
+            send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
         }
 
     Ok(())
@@ -258,14 +257,16 @@ pub async fn preprepare_handler(
 
             let mut pbft_write = pbft.write().await;
 
-            if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit) && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
+            if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
+                && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
+            {
                 pbft_write.step = Step::OK;
             }
 
+            if pbft_write.step != Step::OK {
+                return Ok(());
+            }
             let content = {
-                if pbft_write.step != Step::OK {
-                    return Ok(());
-                }
                 pbft_write.step = Step::ReceivingPrepare;
                 pbft_write.start_time = get_current_timestamp().unwrap();
                 pbft_write.preprepare = Some(preprepare.clone());
@@ -282,7 +283,6 @@ pub async fn preprepare_handler(
                 sign_prepare(&client.private_key, &mut prepare)?;
                 pbft_write.prepares.insert(client.local_node_id);
 
-                
                 let content = bincode::serialize(&prepare).map_err(|e| e.to_string())?;
                 content
             };
@@ -311,17 +311,17 @@ pub async fn prepare_handler(
         println!("接收 Prepare 消息");
 
         let mut pbft_write = pbft.write().await;
+
         if pbft_write.step != Step::ReceivingPrepare || pbft_write.prepares.contains(&prepare.node_id) {
             return Ok(())
         }
-        let content = {
-            pbft_write.prepares.insert(prepare.node_id);
+        pbft_write.prepares.insert(prepare.node_id);
 
-            if pbft_write.prepares.len() < 2 * ((client.identities.len() - 1) / 3) {
-                return Ok(())
-            }
-            pbft_write.step = Step::ReceiveingCommit;
-                
+        if pbft_write.prepares.len() < 2 * ((client.identities.len() - 1) / 3) {
+            return Ok(())
+        }
+        pbft_write.step = Step::ReceiveingCommit;
+        let content = {
             let mut commit = Commit {
                 view_number: pbft_write.view_number,
                 sequence_number: pbft_write.sequence_number,
@@ -368,15 +368,17 @@ pub async fn commit_handler(
         if pbft_write.commits.len() < 2 * ((client.identities.len() - 1) / 3) + 1 {
             return Ok(())
         }
-        pbft_write.step = Step::OK;
         println!("至少 2f + 1 个节点达成共识");
+
         pbft_write.sequence_number += 1;
-        let block = pbft_write.preprepare.clone().unwrap().block;
-        state_write.rocksdb.put_block(&block)?;
-        if client.is_primarry(variable_config.read().await.view_number) {
-            state_write.request_buffer.drain(0..block.transactions.len());
+        if let Some(preprepare) = &pbft_write.preprepare {
+            state_write.rocksdb.put_block(&preprepare.block)?;
+            if client.is_primarry(variable_config.read().await.view_number) {
+                state_write.request_buffer.drain(0..preprepare.requests.len());
+            }
         }
         
+        pbft_write.step = Step::OK;
     }
 
     Ok(())
