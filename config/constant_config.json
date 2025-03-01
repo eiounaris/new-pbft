@@ -1,0 +1,7 @@
+{
+    "database_name": "state",
+    "multi_cast_addr": "224.0.0.88:8888",
+    "multi_cast_ip": "224.0.0.88",
+    "multi_cast_port": 8888,
+    "block_size": 50
+}

@@ -1,8 +1,8 @@
+use crate::config::{ConstantConfig, VariableConfig};
 use crate::network::send_udp_data;
 use crate::pbft::Step;
 use crate::store::{Block, BlockStore, Transaction};
 use crate::utils::get_current_timestamp;
-use crate::SystemConfig;
 use crate::Client;
 use crate::State;
 use crate::Pbft;
@@ -172,21 +172,22 @@ pub struct SyncResponse {
 
 
 pub async fn request_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
     mut request: Request,
 ) -> Result<(), String> {
-        if client.is_primarry(system_config.view_number) {
+        if client.is_primarry(variable_config.read().await.view_number) {
             if verify_request(&client.identities[request.node_id as usize].public_key, &mut request)? {
                 println!("接收 Request 消息");
 
                 let mut state_write = state.write().await;
                 let mut pbft_write = pbft.write().await;
 
-                if state_write.request_buffer.len() < 3 * (system_config.block_size as usize) {
+                if state_write.request_buffer.len() < 3 * (constant_config.block_size as usize) {
                     state_write.add_request(request);
                     println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
                 } else {
@@ -201,7 +202,7 @@ pub async fn request_handler(
                 }
                
                 let content = {
-                    if pbft_write.step != Step::OK || state_write.request_buffer.len() < (system_config.block_size as usize) {
+                    if pbft_write.step != Step::OK || state_write.request_buffer.len() < (constant_config.block_size as usize) {
                         return Ok(());
                     }
                     pbft_write.step = Step::ReceivingPrepare;
@@ -231,7 +232,7 @@ pub async fn request_handler(
                 };
 
                 println!("发送 PrePrepare 消息");
-                let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port)
+                let multicast_addr = constant_config.multi_cast_addr
                     .parse::<SocketAddr>()
                     .map_err(|e| e.to_string())?;
                 send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
@@ -242,14 +243,15 @@ pub async fn request_handler(
 }
 
 pub async fn preprepare_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
     mut preprepare: PrePrepare,
 ) -> Result<(), String> {
-    if !client.is_primarry(system_config.view_number) {
+    if !client.is_primarry(variable_config.read().await.view_number) {
         if verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)? {
             println!("接收 PrePrepare 消息");
             reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
@@ -286,7 +288,7 @@ pub async fn preprepare_handler(
             };
 
             println!("发送 Prepare 消息");
-            let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port)
+            let multicast_addr = constant_config.multi_cast_addr
                 .parse::<SocketAddr>()
                 .map_err(|e| e.to_string())?;
             send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Prepare, &content).await;
@@ -297,7 +299,8 @@ pub async fn preprepare_handler(
 }
 
 pub async fn prepare_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -334,7 +337,7 @@ pub async fn prepare_handler(
         };
 
         println!("发送 Commit 消息");
-        let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port)
+        let multicast_addr = constant_config.multi_cast_addr
             .parse::<SocketAddr>()
             .map_err(|e| e.to_string())?;
         send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Commit, &content).await;
@@ -343,7 +346,8 @@ pub async fn prepare_handler(
     Ok(())
 }
 pub async fn commit_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -369,7 +373,7 @@ pub async fn commit_handler(
         pbft_write.sequence_number += 1;
         let block = pbft_write.preprepare.clone().unwrap().block;
         state_write.rocksdb.put_block(&block)?;
-        if client.is_primarry(system_config.view_number) {
+        if client.is_primarry(variable_config.read().await.view_number) {
             state_write.request_buffer.drain(0..block.transactions.len());
         }
         
@@ -378,7 +382,8 @@ pub async fn commit_handler(
     Ok(())
 }
 pub async fn reply_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -390,14 +395,15 @@ pub async fn reply_handler(
     Ok(())
 }
 pub async fn hearbeat_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
     mut heartbeat: Hearbeat,
 ) -> Result<(), String> {
-    if heartbeat.view_number == system_config.view_number && verify_heartbeat(&client.identities[heartbeat.node_id as usize].public_key, &mut heartbeat)? {
+    if heartbeat.view_number == variable_config.read().await.view_number && verify_heartbeat(&client.identities[heartbeat.node_id as usize].public_key, &mut heartbeat)? {
         // println!("接收到合法 Hearbeat 消息");
         reset_sender.send(()).await.map_err(|e| e.to_string())?; // 重置视图切换计时器
     }
@@ -405,7 +411,8 @@ pub async fn hearbeat_handler(
 }
 
 pub async fn view_change_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -417,7 +424,8 @@ pub async fn view_change_handler(
     Ok(())
 }
 pub async fn new_view_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -429,7 +437,8 @@ pub async fn new_view_handler(
     Ok(())
 }
 pub async fn view_request_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -441,7 +450,8 @@ pub async fn view_request_handler(
     Ok(())
 }
 pub async fn view_response_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -454,7 +464,8 @@ pub async fn view_response_handler(
 }
 
 pub async fn state_request_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -466,7 +477,8 @@ pub async fn state_request_handler(
     Ok(())
 }
 pub async fn state_response_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -478,7 +490,8 @@ pub async fn state_response_handler(
     Ok(())
 }
 pub async fn sync_request_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
@@ -490,7 +503,8 @@ pub async fn sync_request_handler(
     Ok(())
 }
 pub async fn sync_response_handler(
-    system_config : Arc<SystemConfig>,
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,

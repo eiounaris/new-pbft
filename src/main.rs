@@ -7,7 +7,8 @@ async fn main() -> Result<(), String> {
     // 初始化
     match new_pbft::init().await {
         Ok((
-            system_config, 
+            constant_config, 
+            variable_config,
             client, 
             state, 
             pbft, 
@@ -17,11 +18,12 @@ async fn main() -> Result<(), String> {
 
             // 视图请求
             tokio::spawn({
-                let system_config = system_config.clone();
+                let constant_config = constant_config.clone();
+                let variable_config = variable_config.clone();
                 let client = client.clone();
                 let pbft = pbft.clone();
                 async move {
-                    if let Err(e) = new_pbft::view_request(system_config, client, pbft).await {
+                    if let Err(e) = new_pbft::view_request(constant_config, variable_config, client, pbft).await {
                         eprintln!("{e:?}");
                     }
                 }
@@ -29,13 +31,14 @@ async fn main() -> Result<(), String> {
 
             // 消息处理
             let recv_task = tokio::spawn({
-                let system_config = system_config.clone();
+                let constant_config = constant_config.clone();
+                let variable_config = variable_config.clone();
                 let client = client.clone();
                 let state = state.clone();
                 let pbft = pbft.clone();
                 let reset_sender = reset_sender.clone();
                 async move {
-                    if let Err(e) = new_pbft::handle_message(system_config, client, state, pbft, reset_sender).await {
+                    if let Err(e) = new_pbft::handle_message(constant_config, variable_config, client, state, pbft, reset_sender).await {
                         eprintln!("{e:?}");
                     }
                 }
@@ -43,11 +46,12 @@ async fn main() -> Result<(), String> {
 
             // 主节点心跳
             let heartbeat_task = tokio::spawn({
-                let system_config = system_config.clone();
+                let constant_config = constant_config.clone();
+                let variable_config = variable_config.clone();
                 let client = client.clone();
                 let pbft = pbft.clone();
                 async move {
-                    if let Err(e) = new_pbft::heartbeat(system_config, client, pbft).await {
+                    if let Err(e) = new_pbft::heartbeat(constant_config, variable_config, client, pbft).await {
                         eprintln!("{e:?}");
                     }
                 }
@@ -55,11 +59,12 @@ async fn main() -> Result<(), String> {
 
             // 从节点视图切换
             let view_change_task = tokio::spawn({
-                let system_config = system_config.clone();
+                let constant_config = constant_config.clone();
+                let variable_config = variable_config.clone();
                 let client = client.clone();
                 let pbft = pbft.clone();
                 async move {
-                    if let Err(e) = new_pbft::view_change(system_config, client, pbft, reset_receiver).await {
+                    if let Err(e) = new_pbft::view_change(constant_config, variable_config, client, pbft, reset_receiver).await {
                         eprintln!("{e:?}");
                     }
                 }
@@ -67,11 +72,12 @@ async fn main() -> Result<(), String> {
 
             // 命令行输入
             let send_task = tokio::spawn({
+                let constant_config = constant_config.clone();
+                let variable_config = variable_config.clone();
                 let client = client.clone();
-                let system_config =  system_config.clone();
                 let state = state.clone();
                 async move {
-                    if let Err(e) = new_pbft::send_message(client, system_config, state).await {
+                    if let Err(e) = new_pbft::send_message(constant_config, client, state).await {
                         eprintln!("{e:?}");
                     }
                 }

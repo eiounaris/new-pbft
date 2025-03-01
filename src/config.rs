@@ -32,20 +32,38 @@ where
 
 // ---
 
-/// 系统配置（fine）
+/// 持久配置（fine）
 #[derive(Deserialize)]
-pub struct SystemConfig {
+pub struct ConstantConfig {
+    pub database_name: String,
+    pub multi_cast_addr: String,
+    pub multi_cast_ip: String,
+    pub multi_cast_port: u64,
+    pub block_size: u64,
+}
+impl ConstantConfig {
+    /// 从文件加载持久配置
+    pub async fn load_constant_config(filepath: String) -> Result<ConstantConfig, String> {
+        let constant_config_json = read_to_string(filepath).await.map_err(|e| e.to_string())?;
+        let constant_config: ConstantConfig = serde_json::from_str(&constant_config_json).map_err(|e| e.to_string())?;
+        Ok(constant_config)
+    }
+}
+
+/// 动态配置（fine）
+#[derive(Deserialize)]
+pub struct VariableConfig {
     pub view_number: u64,
     pub database_name: String,
     pub multi_cast_ip: String,
     pub multi_cast_port: u64,
     pub block_size: u64,
 }
-impl SystemConfig {
-    /// 从文件加载系统配置
-    pub async fn load_system_config(filepath: String) -> Result<SystemConfig, String> {
-        let system_config_json = read_to_string(filepath).await.map_err(|e| e.to_string())?;
-        let system_config: SystemConfig = serde_json::from_str(&system_config_json).map_err(|e| e.to_string())?;
-        Ok(system_config)
+impl VariableConfig {
+    /// 从文件加载动态配置
+    pub async fn load_variable_config(filepath: String) -> Result<VariableConfig, String> {
+        let variable_config_json = read_to_string(filepath).await.map_err(|e| e.to_string())?;
+        let variable_config: VariableConfig = serde_json::from_str(&variable_config_json).map_err(|e| e.to_string())?;
+        Ok(variable_config)
     }
 }
