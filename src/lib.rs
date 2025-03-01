@@ -68,7 +68,7 @@ pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<RwLock<State>
     // 创建 state
     let state = State::new(&system_config.database_name)?;
     // 创建 pbft
-    let pbft = Pbft::new(system_config.view_number, state.rocksdb.get_last_block()?.unwrap().index, client.identities.len() as u64);
+    let pbft = Pbft::new(system_config.view_number, state.rocksdb.get_last_block()?.unwrap().index);
     // 创建一个通道用于发送重置信号
     let (reset_sender, reset_receiver) = tokio::sync::mpsc::channel(1);
 

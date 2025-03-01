@@ -13,6 +13,8 @@ pub struct Client {
     pub private_key: RsaPrivateKey,
     pub public_key: RsaPublicKey,
     pub identities: Vec<Identity>,
+    pub nodes_number: u64,
+
 }
 impl Client {
     /// 初始化构造函数
@@ -23,12 +25,14 @@ impl Client {
         public_key: RsaPublicKey,
         identities: Vec<Identity>,
     ) -> Self {
+        let nodes_number = identities.len() as u64;
         Client {
             local_node_id,
             local_udp_socket,
             private_key,
             public_key,
             identities,
+            nodes_number,
         }
     }
 

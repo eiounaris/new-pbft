@@ -20,8 +20,8 @@ pub struct Block {
     pub index: u64,
     pub timestamp: u64,
     pub transactions: Vec<Transaction>,
-    pub previous_hash: String,
-    pub hash: String,
+    pub previous_hash: Vec<u8>,
+    pub hash: Vec<u8>,
 }
 
 
@@ -50,8 +50,8 @@ impl RocksDBBlockStore {
                 index: 0,
                 timestamp: get_current_timestamp().unwrap(),
                 transactions: Vec::new(),
-                previous_hash: "genesis".to_string(),
-                hash: "genesis".to_string(),
+                previous_hash: Vec::new(),
+                hash: Vec::new(),
             };
             let mut batch = rocksdb::WriteBatch::default();
             batch.put(genesis_block.index.to_le_bytes(), bincode::serialize(&genesis_block).map_err(|e| e.to_string())?);
@@ -64,8 +64,8 @@ impl RocksDBBlockStore {
 
 impl BlockStore for RocksDBBlockStore {
     fn put_block(&self, block: &Block) -> Result<(), String> {
-        match self.get_last_block() {
-            Ok(Some(last_block)) => {
+        match self.get_last_block()? {
+            Some(last_block) => {
                 if last_block.index + 1 == block.index && last_block.hash == block.previous_hash {
                     let mut batch = rocksdb::WriteBatch::default();
                     batch.put(block.index.to_le_bytes(), bincode::serialize(block).map_err(|e| e.to_string())?);
@@ -74,11 +74,8 @@ impl BlockStore for RocksDBBlockStore {
                 }
                 Ok(())
             },
-            Ok(None) => {
+            None => {
                 Err("缺失创世区块".to_string())
-            }
-            Err(e) => {
-                Err(e)
             }
         }
     }
@@ -124,7 +121,7 @@ impl BlockStore for RocksDBBlockStore {
     }
 
     fn create_block(&self, transactions: &Vec<Transaction>) -> Result<Block, String> {
-        if let Ok(Some(last_block)) = self.get_last_block() {
+        if let Some(last_block) = self.get_last_block()? {
             // 生成新区块
             let index = last_block.index + 1;
             let timestamp = get_current_timestamp().unwrap();

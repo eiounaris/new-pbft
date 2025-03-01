@@ -23,7 +23,6 @@ pub struct Pbft {
     pub sequence_number: u64,
     pub step: Step,
     pub start_time: u64,
-    pub nodes_number: u64,
     pub preprepare: Option<PrePrepare>,
     pub prepares: HashSet<u64>,
     pub commits: HashSet<u64>,
@@ -34,7 +33,6 @@ impl Pbft {
     pub fn new(
         view_number: u64,
         sequence_number: u64,
-        nodes_number: u64
     ) -> Self {
         Pbft {
             view_number: view_number,
@@ -42,7 +40,6 @@ impl Pbft {
             sequence_number: sequence_number,
             step: Step::ReceivingViewResponse,
             start_time: get_current_timestamp().unwrap(),
-            nodes_number: nodes_number,
             preprepare: None,
             prepares: HashSet::new(),
             commits: HashSet::new(),
