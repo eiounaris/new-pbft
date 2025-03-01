@@ -200,17 +200,21 @@ pub async fn request_handler(
                     }
                 }
 
-                let state_read = state.read().await;
-                if pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
+                // 准备 PrePrepare 消息
+                let (preprepare, multicast_addr, content) = {
+                    let state_read = state.read().await;
+                    if !(pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize)) {
+                        return Ok(());
+                    }
                     let mut pbft_write = pbft.write().await;
                     pbft_write.step = Step::ReceivingPrepare;
                     pbft_write.start_time = get_current_timestamp().unwrap();
                     pbft_write.prepares.clear();
                     pbft_write.commits.clear();
-                    
-                    let transactions = state_read.request_buffer.iter()
-                    .map(|req| req.transaction.clone())
-                    .collect();
+
+                    let transactions: Vec<_> = state_read.request_buffer.iter()
+                        .map(|req| req.transaction.clone())
+                        .collect();
 
                     let mut preprepare = PrePrepare {
                         view_number: pbft_write.view_number,
@@ -221,14 +225,51 @@ pub async fn request_handler(
                         requests: state_read.request_buffer.clone(),
                         block: state_read.rocksdb.create_block(&transactions)?,
                     };
+
                     sign_preprepare(&client.private_key, &mut preprepare)?;
                     pbft_write.preprepare = Some(preprepare.clone());
 
-                    println!("发送 PrePrepare 消息");
-                    let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
+                    let multicast_addr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port)
+                        .parse::<SocketAddr>()
+                        .map_err(|e| e.to_string())?;
                     let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
-                    send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
-                }
+
+                    (preprepare, multicast_addr, content)
+                }; // 锁在此释放
+
+                // 异步发送（无锁）
+                println!("发送 PrePrepare 消息");
+                send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
+
+                // let state_read = state.read().await;
+                // if pbft.read().await.step == Step::OK && state_read.request_buffer.len() >= (system_config.block_size as usize) {
+                //     let mut pbft_write = pbft.write().await;
+                //     pbft_write.step = Step::ReceivingPrepare;
+                //     pbft_write.start_time = get_current_timestamp().unwrap();
+                //     pbft_write.prepares.clear();
+                //     pbft_write.commits.clear();
+                    
+                //     let transactions = state_read.request_buffer.iter()
+                //     .map(|req| req.transaction.clone())
+                //     .collect();
+
+                //     let mut preprepare = PrePrepare {
+                //         view_number: pbft_write.view_number,
+                //         sequence_number: pbft_write.sequence_number,
+                //         digest: Request::digest_requests(&state_read.request_buffer)?,
+                //         node_id: client.local_node_id,
+                //         signature: Vec::new(),
+                //         requests: state_read.request_buffer.clone(),
+                //         block: state_read.rocksdb.create_block(&transactions)?,
+                //     };
+                //     sign_preprepare(&client.private_key, &mut preprepare)?;
+                //     pbft_write.preprepare = Some(preprepare.clone());
+
+                //     println!("发送 PrePrepare 消息");
+                //     let multicast_addr: SocketAddr = format!("{}:{}", system_config.multi_cast_ip, system_config.multi_cast_port).parse::<SocketAddr>().map_err(|e| e.to_string())?;
+                //     let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
+                //     send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
+                // }
             }
         }
 
