@@ -100,8 +100,8 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>,
             let Ok(interval_us) = parts[2].parse::<u64>() else { continue };
             let interval = Duration::from_micros(interval_us);
             let mut old_index = 0;
-            if let Some(old_lock) = state.read().await.rocksdb.get_last_block().unwrap() {
-                old_index = old_lock.index;
+            if let Some(old_block) = state.read().await.rocksdb.get_last_block().unwrap() {
+                old_index = old_block.index;
             }
             for i in 0..count {
                 send_udp_data(
@@ -113,9 +113,12 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>,
                 sleep(interval).await;
                 println!("第 {} 次请求完成", i + 1);
             }
-            if let Some(last_block) = state.read().await.rocksdb.get_last_block().unwrap() {
-                if let Some(plus_block) = state.read().await.rocksdb.get_block_by_index(old_index).unwrap() {
-                    println!("tps = {}", (last_block.index - plus_block.index) / (last_block.timestamp - plus_block.timestamp) * system_config.block_size);
+            if let Some(end_block) = state.read().await.rocksdb.get_last_block().unwrap() {
+                if let Some(begin_block) = state.read().await.rocksdb.get_block_by_index(old_index + 1).unwrap() {
+                    println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);
+                    println!("begin_timestamp: {}, end_timestamp: {}", begin_block.timestamp, end_block.timestamp);
+                    println!("blocksize: {}", system_config.block_size);
+                    println!("tps = {}", (end_block.index - begin_block.index) / (end_block.timestamp - begin_block.timestamp) * end_block.transactions.len() as u64);
                 }
             }
         } else {
