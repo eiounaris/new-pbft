@@ -75,7 +75,7 @@ pub async fn init() -> Result<(Arc<SystemConfig>, Arc<Client>, Arc<RwLock<State>
 
 
 /// 任务: 发送命令行指令数据，用于测试tps（待修改为高性能 Restful API 供本机用户调用）
-pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>) -> Result<(), std::string::String> {
+pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>, state: Arc<RwLock<State>>) -> Result<(), std::string::String> {
     let stdin = tokio::io::stdin();
     let reader = tokio::io::BufReader::new(stdin);
     let mut lines = reader.lines();
@@ -99,6 +99,10 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
             let Ok(count) = parts[1].parse::<u64>() else { continue };
             let Ok(interval_us) = parts[2].parse::<u64>() else { continue };
             let interval = Duration::from_micros(interval_us);
+            let mut old_index = 0;
+            if let Some(old_lock) = state.read().await.rocksdb.get_last_block().unwrap() {
+                old_index = old_lock.index;
+            }
             for i in 0..count {
                 send_udp_data(
                     &client.local_udp_socket,
@@ -108,6 +112,11 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>)
                 ).await;
                 sleep(interval).await;
                 println!("第 {} 次请求完成", i + 1);
+            }
+            if let Some(last_block) = state.read().await.rocksdb.get_last_block().unwrap() {
+                if let Some(plus_block) = state.read().await.rocksdb.get_block_by_index(old_index).unwrap() {
+                    println!("tps = {}", (last_block.index - plus_block.index) / (last_block.timestamp - plus_block.timestamp) * system_config.block_size);
+                }
             }
         } else {
             send_udp_data(

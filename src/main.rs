@@ -69,8 +69,9 @@ async fn main() -> Result<(), String> {
             let send_task = tokio::spawn({
                 let client = client.clone();
                 let system_config =  system_config.clone();
+                let state = state.clone();
                 async move {
-                    if let Err(e) = new_pbft::send_message(client, system_config).await {
+                    if let Err(e) = new_pbft::send_message(client, system_config, state).await {
                         eprintln!("{e:?}");
                     }
                 }
