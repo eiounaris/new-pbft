@@ -98,7 +98,7 @@ pub async fn send_message(client: Arc<Client>, system_config: Arc<SystemConfig>,
         if parts.len() == 3 && parts[0] == "test" {
             let Ok(count) = parts[1].parse::<u64>() else { continue };
             let Ok(interval_us) = parts[2].parse::<u64>() else { continue };
-            let interval = Duration::from_micros(interval_us);
+            let interval = Duration::from_millis(interval_us);
             let mut old_index = 0;
             if let Some(old_block) = state.read().await.rocksdb.get_last_block().unwrap() {
                 old_index = old_block.index;
