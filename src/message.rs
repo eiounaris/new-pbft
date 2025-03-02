@@ -618,11 +618,12 @@ pub async fn state_response_handler(
             from_index: pbft_read.sequence_number + 1,
             to_index: state_response.sequence_number,
         };
+
         send_udp_data(
             &client.local_udp_socket,
             &src_socket_addr,
             MessageType::SyncRequest,
-            &bincode::serialize(&state_response).map_err(|e| e.to_string())?,
+            &bincode::serialize(&sysnc_request).map_err(|e| e.to_string())?,
         ).await;
     }
 
@@ -641,6 +642,7 @@ pub async fn sync_request_handler(
 ) -> Result<(), String> {
 
     println!("接收到 SyncRequest 消息");
+    println!("{:?}", sync_request);
 
     let blocks = state.read().await.rocksdb
         .get_blocks_in_range(sync_request.from_index, sync_request.to_index)?
