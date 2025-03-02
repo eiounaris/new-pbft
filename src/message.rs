@@ -259,8 +259,8 @@ pub async fn preprepare_handler(
 
     if !client.is_primarry(variable_config_read.view_number)
         && preprepare.view_number == variable_config_read.view_number
-        && preprepare.sequence_number == pbft_write.sequence_number + 1
-        // && preprepare.block.previous_hash == state_read.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.hash
+        // && preprepare.sequence_number == pbft_write.sequence_number + 1
+        && preprepare.block.previous_hash == state_read.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.hash
         && verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)?
     {
         println!("接收 PrePrepare 消息");
