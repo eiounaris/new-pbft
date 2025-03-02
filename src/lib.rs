@@ -149,10 +149,11 @@ pub async fn view_request (
 
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后如未能得到视图编号，则切换状态 Ok 或 ViewChange
 
-    if pbft.read().await.step == Step::ReceivingViewResponse {
 
-        let mut pbft_write = pbft.write().await;
-        
+    let mut pbft_write = pbft.write().await;
+
+    if pbft_write.step == Step::ReceivingViewResponse {
+
         pbft_write.view_change_mutiple_set.clear();
         pbft_write.step = Step::Ok
     }
