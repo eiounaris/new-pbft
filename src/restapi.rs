@@ -114,11 +114,11 @@ pub async fn actix_web_runweb_run(
 
 
 /*
-curl http://localhost:8080/last
+curl http://localhost:8080/last_block
 
 curl http://localhost:8080/block/index
 
-curl -X POST http://localhost:8080/block \
+curl -X POST http://localhost:8080/send_request \
   -H "Content-Type: application/json" \
   -d '"Operation1"'
 */
