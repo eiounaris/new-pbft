@@ -525,6 +525,11 @@ pub async fn view_response_handler(
             return Ok(())
         }
 
+        if view_response.view_number == variable_config_write.view_number {
+            pbft_write.step = Step::Ok;
+            return Ok(())
+        }
+
         pbft_write.step = Step::ReceivingStateResponse;
 
         println!("切换视图为：{}", view_response.view_number);
@@ -626,7 +631,11 @@ pub async fn state_response_handler(
             MessageType::SyncRequest,
             &bincode::serialize(&sysnc_request).map_err(|e| e.to_string())?,
         ).await;
+    } else {
+        pbft.write().await.step = Step::Ok;
     }
+
+    
 
     Ok(())
 }
@@ -652,16 +661,10 @@ pub async fn sync_request_handler(
         blocks.push(state.read().await.rocksdb.get_block_by_index(i)?.ok_or_else(|| "区间查询无区块")?);
     }
 
-    // let blocks = state.read().await.rocksdb
-    //     .get_blocks_in_range(sync_request.from_index, sync_request.to_index)?
-    //     .ok_or_else(|| "区间查询无区块")?;
-
     let mut sync_response = SyncResponse {
         blocks: blocks,
         signature: Vec::new(),
     };
-
-    println!("发送 SyncResponse 消息, {:?}", sync_response.blocks);
 
     sign_sync_response(&client.private_key, &mut sync_response)?;
 
