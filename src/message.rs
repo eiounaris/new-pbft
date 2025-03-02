@@ -689,7 +689,7 @@ pub async fn sync_response_handler(
 
     let variable_config_read = variable_config.read().await;
     let state_read = state.read().await;
-    let pbft_read = pbft.read().await;
+    
 
     if verify_sync_response(
         &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, 
@@ -701,21 +701,26 @@ pub async fn sync_response_handler(
         for block in sync_response.blocks.iter() {
             state_read.rocksdb.put_block(block)?;
         }
+
+        let mut pbft_write = pbft.write().await;
+        pbft_write.sequence_number += sync_response.blocks.len() as u64;
+
+
     
-        // println!("再次发送 StateRequest 消息，检查是否完成");
+        println!("再次发送 StateRequest 消息，检查是否完成");
 
-        // let target_udp_socket = format!("{}:{}",
-        //     &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].ip, 
-        //     &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].port)
-        //     .parse::<SocketAddr>()
-        //     .map_err(|e| e.to_string())?;
+        let target_udp_socket = format!("{}:{}",
+            &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].ip, 
+            &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].port)
+            .parse::<SocketAddr>()
+            .map_err(|e| e.to_string())?;
 
-        // send_udp_data(
-        //     &client.local_udp_socket, 
-        //     &target_udp_socket,
-        //      MessageType::StateRequest, 
-        //      &Vec::new()
-        // ).await;
+        send_udp_data(
+            &client.local_udp_socket, 
+            &target_udp_socket,
+             MessageType::StateRequest, 
+             &Vec::new()
+        ).await;
     }
 
     Ok(())
