@@ -554,6 +554,7 @@ pub async fn view_request (
     client: Arc<Client>, 
     pbft: Arc<RwLock<Pbft>>,
 ) -> Result<(), String> {
+    println!("{:?}", pbft.read().await.step);
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后获取视图编号
     println!("发送 ViewRequest 消息");
     let multicast_addr = constant_config.multi_cast_addr.parse::<SocketAddr>().map_err(|e| e.to_string())?;

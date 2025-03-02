@@ -409,10 +409,12 @@ pub async fn hearbeat_handler(
     reset_sender: mpsc::Sender<()>,
     mut heartbeat: Hearbeat,
 ) -> Result<(), String> {
+    let mut pbft_write = pbft.write().await;
     if heartbeat.view_number == variable_config.read().await.view_number
+        && pbft_write.step == Step::Ok
         && verify_heartbeat(&client.identities[(variable_config.read().await.view_number % client.nodes_number) as usize].public_key, &mut heartbeat)? {
         // println!("接收到合法 Hearbeat 消息");
-        pbft.write().await.step = Step::Ok;
+        pbft_write.step = Step::Ok;
         reset_sender.send(()).await.map_err(|e| e.to_string())?; // 重置视图切换计时器
     }
     Ok(())
@@ -466,7 +468,7 @@ pub async fn view_request_handler(
     sign_view_response(&client.private_key, &mut view_response)?;
     send_udp_data(
         &client.local_udp_socket,
-       &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
+        &src_socket_addr,
         MessageType::ViewResponse,
         &bincode::serialize(&view_response).map_err(|e| e.to_string())?,
     ).await;
@@ -487,7 +489,7 @@ pub async fn view_response_handler(
 
     let mut variable_config_write = variable_config.write().await;
     let mut pbft_write = pbft.write().await;
-
+    
     if pbft_write.step != Step::ReceivingViewResponse {
         return Ok(())
     }

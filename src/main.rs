@@ -78,6 +78,7 @@ async fn main() -> Result<(), String> {
                 let client = client.clone();
                 let state = state.clone();
                 async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
                     if let Err(e) = new_pbft::send_message(constant_config, client, state).await {
                         eprintln!("{e:?}");
                     }
