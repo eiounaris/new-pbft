@@ -638,15 +638,23 @@ pub async fn sync_request_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    sync_request: SyncRequest,
+    mut sync_request: SyncRequest,
     src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
 
-    println!("接收到 SyncRequest 消息");
+    
+    sync_request.to_index = min(sync_request.to_index, sync_request.from_index + 50); 
 
-    let blocks = state.read().await.rocksdb
-        .get_blocks_in_range(sync_request.from_index, min(sync_request.to_index, sync_request.from_index + 100))?
-        .ok_or_else(|| "区间查询无区块")?;
+    println!("接收到 SyncRequest 消息, {:?}", sync_request);
+    let mut blocks: Vec<Block> = Vec::new();
+
+    for i in sync_request.from_index..=sync_request.to_index {
+        blocks.push(state.read().await.rocksdb.get_block_by_index(i)?.ok_or_else(|| "区间查询无区块")?);
+    }
+
+    // let blocks = state.read().await.rocksdb
+    //     .get_blocks_in_range(sync_request.from_index, sync_request.to_index)?
+    //     .ok_or_else(|| "区间查询无区块")?;
 
     let mut sync_response = SyncResponse {
         blocks: blocks,
@@ -694,20 +702,20 @@ pub async fn sync_response_handler(
             state_read.rocksdb.put_block(block)?;
         }
     
-        println!("再次发送 StateRequest 消息，检查是否完成");
+        // println!("再次发送 StateRequest 消息，检查是否完成");
 
-        let target_udp_socket = format!("{}:{}",
-            &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].ip, 
-            &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].port)
-            .parse::<SocketAddr>()
-            .map_err(|e| e.to_string())?;
+        // let target_udp_socket = format!("{}:{}",
+        //     &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].ip, 
+        //     &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].port)
+        //     .parse::<SocketAddr>()
+        //     .map_err(|e| e.to_string())?;
 
-        send_udp_data(
-            &client.local_udp_socket, 
-            &target_udp_socket,
-             MessageType::StateRequest, 
-             &Vec::new()
-        ).await;
+        // send_udp_data(
+        //     &client.local_udp_socket, 
+        //     &target_udp_socket,
+        //      MessageType::StateRequest, 
+        //      &Vec::new()
+        // ).await;
     }
 
     Ok(())
