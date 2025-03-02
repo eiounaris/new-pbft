@@ -13,7 +13,7 @@ mod state;
 
 use store::{BlockStore, Transaction};
 use utils::get_current_timestamp;
-use key::{load_private_key, load_public_key, sign_heartbeat, sign_request};
+use key::{load_private_key, load_public_key, sign_heartbeat, sign_request, sign_new_view};
 use network::send_udp_data;
 use message::{MessageType, Request, PrePrepare, Prepare, Commit,Reply, Hearbeat, ViewChange, NewView, ViewRequest, ViewResponse, StateRequest, StateResponse, SyncRequest, SyncResponse};
 use client::Client;
@@ -25,8 +25,7 @@ use tokio::{ net::UdpSocket, io::AsyncBufReadExt};
 use tokio::time::{interval, Duration, sleep};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
-// use tokio::io;
-// use std::io;
+use rand::Rng;
 
 use dotenv::dotenv;
 
@@ -521,7 +520,25 @@ pub async fn view_change(
         tokio::select! {
             _ = interval.tick() => {
                 if !client.is_primarry(variable_config.read().await.view_number) {
-                    println!("从节点发送 ViewChange 消息")
+                    pbft.write().await.step = Step::ViewChanging;
+                    // 生成 0 到 1000 之间的随机整数
+                    let num: u64 = rand::random::<u64>() % 1000;
+                    println!("随机数{}", num);
+                    sleep(Duration::from_millis(num)).await;
+                    println!("从节点发送 NewView 消息");
+                    let mut new_view = NewView {
+                        view_number: variable_config.read().await.view_number,
+                        sequence_number: pbft.read().await.sequence_number,
+                        node_id: client.local_node_id,
+                        signature: Vec::new()
+                    };
+                    sign_new_view(&client.private_key, &mut new_view)?;
+                    send_udp_data(
+                        &client.local_udp_socket,
+                       &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
+                        MessageType::NewView,
+                        &bincode::serialize(&new_view).map_err(|e| e.to_string())?,
+                    ).await;
                 }
             }
             _ = reset_receiver.recv() => {
@@ -541,7 +558,7 @@ pub async fn view_request (
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后获取视图编号
     println!("发送 ViewRequest 消息");
     let multicast_addr = constant_config.multi_cast_addr.parse::<SocketAddr>().map_err(|e| e.to_string())?;
-    let content = Vec::new();        
+    let content = Vec::new();
     send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::ViewRequest, &content).await;
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态
     if pbft.read().await.step == Step::ReceivingViewResponse {

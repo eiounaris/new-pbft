@@ -111,7 +111,6 @@ pub struct Hearbeat {
 pub struct ViewChange {
     pub view_number: u64, 
     pub sequence_number: u64,
-    pub next_view_number: u64, 
     pub node_id: u64,
     pub signature: Vec<u8>, // -> all
 }
@@ -121,7 +120,6 @@ pub struct ViewChange {
 pub struct NewView {
     pub view_number: u64,
     pub sequence_number: u64,
-    pub next_view_number: u64, 
     pub node_id: u64,
     pub signature: Vec<u8>, // -> all
 }

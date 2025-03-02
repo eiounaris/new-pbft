@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 pub enum Step {
     ReceivingViewResponse = 0,
     ReceivingStateResponse = 1,
-    Initializing = 2,
-    Initialized = 3,
+
+    ViewChanging = 2,
 
     OK = 4,
     ReceivingPrepare = 5,
