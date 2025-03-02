@@ -15,7 +15,7 @@ pub async fn send_udp_data(
     let mut message = Box::new(Vec::new());
     message.push(message_type as u8);
     message.extend_from_slice(&content);
-    println!("发送消息大小为：{}", message.len());
+    // println!("发送消息大小为：{}", message.len());
     local_udp_socket.send_to(&message, target_udp_socket).await.unwrap();
 }
 
