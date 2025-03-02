@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use rsa::{pkcs1::DecodeRsaPublicKey, RsaPublicKey};
-use tokio::fs::read_to_string;
+use tokio::fs;
 // ---
 
 /// 身份配置（fine）
@@ -15,8 +15,10 @@ pub struct Identity {
 impl Identity {
     /// 从文件加载节点身份信息
     pub async fn load_identity_config(filepath: String) -> Result<Vec<Identity>, String> {
-        let identitys_config_json = read_to_string(filepath).await.map_err(|e| e.to_string())?;
-        let identitys: Vec<Identity> = serde_json::from_str(&identitys_config_json).map_err(|e| e.to_string())?;
+        let identitys_config_json = fs::read_to_string(filepath).await
+            .map_err(|e| e.to_string())?;
+        let identitys: Vec<Identity> = serde_json::from_str(&identitys_config_json)
+            .map_err(|e| e.to_string())?;
         Ok(identitys)
     }
 }
@@ -45,8 +47,10 @@ pub struct ConstantConfig {
 impl ConstantConfig {
     /// 从文件加载持久配置
     pub async fn load_constant_config(filepath: String) -> Result<ConstantConfig, String> {
-        let constant_config_json = read_to_string(filepath).await.map_err(|e| e.to_string())?;
-        let constant_config: ConstantConfig = serde_json::from_str(&constant_config_json).map_err(|e| e.to_string())?;
+        let constant_config_json = fs::read_to_string(filepath).await
+            .map_err(|e| e.to_string())?;
+        let constant_config: ConstantConfig = serde_json::from_str(&constant_config_json)
+            .map_err(|e| e.to_string())?;
         Ok(constant_config)
     }
 }
@@ -59,8 +63,10 @@ pub struct VariableConfig {
 impl VariableConfig {
     /// 从文件加载动态配置
     pub async fn load_variable_config(filepath: String) -> Result<VariableConfig, String> {
-        let variable_config_json = read_to_string(filepath).await.map_err(|e| e.to_string())?;
-        let variable_config: VariableConfig = serde_json::from_str(&variable_config_json).map_err(|e| e.to_string())?;
+        let variable_config_json = fs::read_to_string(filepath).await
+            .map_err(|e| e.to_string())?;
+        let variable_config: VariableConfig = serde_json::from_str(&variable_config_json)
+            .map_err(|e| e.to_string())?;
         Ok(variable_config)
     }
 }

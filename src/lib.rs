@@ -68,7 +68,7 @@ pub async fn init() -> Result<(
     let public_key = load_public_key(&public_key_path).await?;
     let local_identitiy = identities.iter()
         .find(|identity| identity.node_id == local_node_id)
-        .ok_or("节点身份文件缺失当前节点信息！！！")?;
+        .ok_or_else(|| "节点身份文件缺失当前节点信息！！！")?;
     // 创建广播套接字
     let udp_socket = UdpSocket::bind(format!("{}:{}", "0.0.0.0", constant_config.multi_cast_port)).await
         .map_err(|e| e.to_string())?;
@@ -86,11 +86,19 @@ pub async fn init() -> Result<(
     // 创建 state
     let state = State::new(&constant_config.database_name)?;
     // 创建 pbft
-    let pbft = Pbft::new(variable_config.view_number, state.rocksdb.get_last_block()?.ok_or("缺失创世区块！！！")?.index);
+    let pbft = Pbft::new(variable_config.view_number, state.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块！！！")?.index);
     // 创建 channel
     let (reset_sender, reset_receiver) = tokio::sync::mpsc::channel(1);
     // 返回初始化信息
-    Ok((Arc::new(constant_config), Arc::new(RwLock::new(variable_config)),Arc::new(client), Arc::new(RwLock::new(state)), Arc::new(RwLock::new(pbft)), reset_sender, reset_receiver))
+    Ok((
+        Arc::new(constant_config), 
+        Arc::new(RwLock::new(variable_config)), 
+        Arc::new(client), 
+        Arc::new(RwLock::new(state)), 
+        Arc::new(RwLock::new(pbft)), 
+        reset_sender, 
+        reset_receiver
+    ))
 }
 
 
@@ -158,9 +166,13 @@ pub async fn send_message(
                     println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);
                     println!("begin_timestamp: {}, end_timestamp: {}", begin_block.timestamp, end_block.timestamp);
                     println!("blocksize: {}", constant_config.block_size);
-                    println!("tps = {}", (end_block.index - begin_block.index) as f64  * end_block.transactions.len() as f64 / (end_block.timestamp - begin_block.timestamp) as f64);
+                    println!("tps = {}", (
+                        end_block.index - begin_block.index) as f64  
+                        * end_block.transactions.len() as f64 
+                        / (end_block.timestamp - begin_block.timestamp) as f64
+                    );
                 } else {
-                    eprintln!("缺失索引区块");
+                    eprintln!("缺失开始索引区块");
                 }
             } else {
                 eprintln!("缺失创世区块");
@@ -224,9 +236,11 @@ pub async fn handle_message(
 
         // 分别处理对应消息
         match message_type {
-            // 处理请求消息
+
             MessageType::Request => {
-                if let Ok(request) = bincode::deserialize::<Request>(content).map_err(|e| e.to_string()) {
+                if let Ok(request) = 
+                    bincode::deserialize::<Request>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -235,15 +249,24 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::request_handler(constant_config, variable_config, client, state, pbft, reset_sender, request).await {
+                            if let Err(e) = message::request_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, state, pbft, 
+                                reset_sender, 
+                                request
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::PrePrepare => {
-                if let Ok(preprepare) = bincode::deserialize::<PrePrepare>(content).map_err(|e| e.to_string()) {
+                if let Ok(preprepare) = 
+                    bincode::deserialize::<PrePrepare>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -252,15 +275,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::preprepare_handler(constant_config, variable_config, client, state, pbft, reset_sender, preprepare).await {
+                            if let Err(e) = message::preprepare_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                preprepare
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::Prepare => {
-                if let Ok(prepare) = bincode::deserialize::<Prepare>(content).map_err(|e| e.to_string()) {
+                if let Ok(prepare) = 
+                    bincode::deserialize::<Prepare>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -269,15 +303,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::prepare_handler(constant_config, variable_config, client, state, pbft, reset_sender, prepare).await {
+                            if let Err(e) = message::prepare_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                prepare
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::Commit => {
-                if let Ok(commit) = bincode::deserialize::<Commit>(content).map_err(|e| e.to_string()) {
+                if let Ok(commit) = 
+                    bincode::deserialize::<Commit>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -286,15 +331,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::commit_handler(constant_config, variable_config, client, state, pbft, reset_sender, commit).await {
+                            if let Err(e) = message::commit_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                commit
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::Reply => {
-                if let Ok(reply) = bincode::deserialize::<Reply>(content).map_err(|e| e.to_string()) {
+                if let Ok(reply) = 
+                    bincode::deserialize::<Reply>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -303,15 +359,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::reply_handler(constant_config, variable_config, client, state, pbft, reset_sender, reply).await {
+                            if let Err(e) = message::reply_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                reply
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::Hearbeat => {
-                if let Ok(hearbeat) = bincode::deserialize::<Hearbeat>(content).map_err(|e| e.to_string()) {
+                if let Ok(hearbeat) = 
+                    bincode::deserialize::<Hearbeat>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -320,15 +387,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::hearbeat_handler(constant_config, variable_config, client, state, pbft, reset_sender, hearbeat).await {
+                            if let Err(e) = message::hearbeat_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                hearbeat
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::ViewChange => {
-                if let Ok(view_change) = bincode::deserialize::<ViewChange>(content).map_err(|e| e.to_string()) {
+                if let Ok(view_change) = 
+                    bincode::deserialize::<ViewChange>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -337,15 +415,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::view_change_handler(constant_config, variable_config, client, state, pbft, reset_sender, view_change).await {
+                            if let Err(e) = message::view_change_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                view_change
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::NewView => {
-                if let Ok(new_view) = bincode::deserialize::<NewView>(content).map_err(|e| e.to_string()) {
+                if let Ok(new_view) = 
+                    bincode::deserialize::<NewView>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -354,15 +443,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::new_view_handler(constant_config, variable_config, client, state, pbft, reset_sender, new_view).await {
+                            if let Err(e) = message::new_view_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                new_view
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::ViewRequest => {
-                if let Ok(view_request) = bincode::deserialize::<ViewRequest>(content).map_err(|e| e.to_string()) {
+                if let Ok(view_request) = 
+                    bincode::deserialize::<ViewRequest>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -371,15 +471,27 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::view_request_handler(constant_config, variable_config, client, state, pbft, reset_sender, view_request, src_socket_addr).await {
+                            if let Err(e) = message::view_request_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                view_request, 
+                                src_socket_addr
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::ViewResponse => {
-                if let Ok(view_response) = bincode::deserialize::<ViewResponse>(content).map_err(|e| e.to_string()) {
+                if let Ok(view_response) = 
+                    bincode::deserialize::<ViewResponse>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -388,15 +500,27 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::view_response_handler(constant_config, variable_config, client, state, pbft, reset_sender, view_response, src_socket_addr).await {
+                            if let Err(e) = message::view_response_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                view_response, 
+                                src_socket_addr
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+            
             MessageType::StateRequest => {
-                if let Ok(state_request) = bincode::deserialize::<StateRequest>(content).map_err(|e| e.to_string()) {
+                if let Ok(state_request) = 
+                    bincode::deserialize::<StateRequest>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -405,15 +529,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::state_request_handler(constant_config, variable_config, client, state, pbft, reset_sender, state_request).await {
+                            if let Err(e) = message::state_request_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                state_request
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::StateResponse => {
-                if let Ok(state_response) = bincode::deserialize::<StateResponse>(content).map_err(|e| e.to_string()) {
+                if let Ok(state_response) = 
+                    bincode::deserialize::<StateResponse>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -422,15 +557,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::state_response_handler(constant_config, variable_config, client, state, pbft, reset_sender, state_response).await {
+                            if let Err(e) = message::state_response_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                state_response
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::SyncRequest => {
-                if let Ok(sync_request) = bincode::deserialize::<SyncRequest>(content).map_err(|e| e.to_string()) {
+                if let Ok(sync_request) = 
+                    bincode::deserialize::<SyncRequest>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -439,15 +585,26 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::sync_request_handler(constant_config, variable_config, client, state, pbft, reset_sender, sync_request).await {
+                            if let Err(e) = message::sync_request_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                sync_request
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::SyncResponse => {
-                if let Ok(sync_response) = bincode::deserialize::<SyncResponse>(content).map_err(|e| e.to_string()) {
+                if let Ok(sync_response) = 
+                    bincode::deserialize::<SyncResponse>(content).map_err(|e| e.to_string()) 
+                {
                     tokio::spawn({
                         let constant_config = constant_config.clone();
                         let variable_config = variable_config.clone();
@@ -456,13 +613,22 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::sync_response_handler(constant_config, variable_config, client, state, pbft, reset_sender, sync_response).await {
+                            if let Err(e) = message::sync_response_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, 
+                                state, 
+                                pbft, 
+                                reset_sender, 
+                                sync_response
+                            ).await {
                                 eprintln!("{e:?}");
                             }
                         }
                     });
                 }
             },
+
             MessageType::Unknown => {
                 eprintln!("Reiceive unknown message type");
                 continue;
@@ -484,10 +650,11 @@ pub async fn heartbeat(
     loop {
         tokio::select! {
             _ = interval.tick() => {
-                if client.is_primarry(variable_config.read().await.view_number) {
+                let variable_config_read = variable_config.read().await;
+                if client.is_primarry(variable_config_read.view_number) {
                     // println!("主节点发送 Hearbeat 消息");
                     let mut heartbeat = Hearbeat {
-                        view_number: variable_config.read().await.view_number,
+                        view_number: variable_config_read.view_number,
                         sequence_number: pbft.read().await.sequence_number,
                         node_id: client.local_node_id,
                         signature: Vec::new(),
@@ -518,16 +685,18 @@ pub async fn view_change(
     loop {
         tokio::select! {
             _ = interval.tick() => {
-                if !client.is_primarry(variable_config.read().await.view_number) {
-                    pbft.write().await.step = Step::ViewChanging;
-                    // 生成 0 到 1000 之间的随机整数
-                    let num: u64 = rand::random::<u64>() % 1000;
-                    println!("随机数{}", num);
+                let variable_config_read = variable_config.read().await;
+                if !client.is_primarry(variable_config_read.view_number) {
+                    let mut pbft_write = pbft.write().await;
+                    pbft_write.step = Step::ViewChanging;
+                    
+                    let num: u64 = rand::random::<u64>() % 1000; // 生成 0 到 1000 之间的随机整数
                     sleep(Duration::from_millis(num)).await;
+
                     println!("从节点发送 NewView 消息");
                     let mut new_view = NewView {
-                        view_number: variable_config.read().await.view_number,
-                        sequence_number: pbft.read().await.sequence_number,
+                        view_number: variable_config_read.view_number,
+                        sequence_number: pbft_write.sequence_number,
                         node_id: client.local_node_id,
                         signature: Vec::new()
                     };
@@ -554,17 +723,24 @@ pub async fn view_request (
     client: Arc<Client>, 
     pbft: Arc<RwLock<Pbft>>,
 ) -> Result<(), String> {
-    println!("{:?}", pbft.read().await.step);
-    sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后获取视图编号
     println!("发送 ViewRequest 消息");
-    let multicast_addr = constant_config.multi_cast_addr.parse::<SocketAddr>().map_err(|e| e.to_string())?;
+
+    let multicast_addr = constant_config.multi_cast_addr
+        .parse::<SocketAddr>()
+        .map_err(|e| e.to_string())?;
     let content = Vec::new();
-    send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::ViewRequest, &content).await;
+    send_udp_data(
+        &client.local_udp_socket, 
+        &multicast_addr, 
+        MessageType::ViewRequest, 
+        &content
+    ).await;
+
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态
-    if pbft.read().await.step == Step::ReceivingViewResponse {
-        let mut pbft = pbft.write().await;
-        pbft.view_change_mutiple_set.clear();
-        pbft.step = Step::Ok
+    let mut pbft_write = pbft.write().await;
+    if pbft_write.step == Step::ReceivingViewResponse {
+        pbft_write.view_change_mutiple_set.clear();
+        pbft_write.step = Step::Ok
     }
     Ok(())
 }

@@ -17,6 +17,9 @@ use tokio::fs;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+
+
 /// 消息类型（待调整）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MessageType {
@@ -182,63 +185,64 @@ pub async fn request_handler(
     reset_sender: mpsc::Sender<()>,
     mut request: Request,
 ) -> Result<(), String> {
-        if client.is_primarry(variable_config.read().await.view_number) 
-            && verify_request(&client.identities[request.node_id as usize].public_key, &mut request)?
+    
+    if client.is_primarry(variable_config.read().await.view_number) 
+        && verify_request(&client.identities[request.node_id as usize].public_key, &mut request)?
+    {
+        println!("接收 Request 消息");
+
+        let mut state_write = state.write().await;
+        let mut pbft_write = pbft.write().await;
+
+        if state_write.request_buffer.len() < 3 * (constant_config.block_size as usize) {
+            state_write.add_request(request);
+            println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
+        } else {
+            eprintln!("缓冲已满");
+        }
+
+        if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
+            && (get_current_timestamp().unwrap() - pbft_write.start_time > 1)
         {
-            println!("接收 Request 消息");
+            pbft_write.step = Step::Ok;
+        }
 
-            let mut state_write = state.write().await;
-            let mut pbft_write = pbft.write().await;
+        if pbft_write.step != Step::Ok || state_write.request_buffer.len() < constant_config.block_size as usize {
+            return Ok(());
+        }
+        let content = {
+            pbft_write.step = Step::ReceivingPrepare;
+            pbft_write.start_time = get_current_timestamp().unwrap();
+            pbft_write.prepares.clear();
+            pbft_write.commits.clear();
 
-            if state_write.request_buffer.len() < 3 * (constant_config.block_size as usize) {
-                state_write.add_request(request);
-                println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
-            } else {
-                eprintln!("缓冲已满");
-            }
+            let transactions: Vec<_> = state_write.request_buffer.iter()
+                .map(|req| req.transaction.clone())
+                .collect();
 
-            if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
-                && (get_current_timestamp().unwrap() - pbft_write.start_time > 1)
-            {
-                pbft_write.step = Step::Ok;
-            }
-
-            if pbft_write.step != Step::Ok || state_write.request_buffer.len() < constant_config.block_size as usize {
-                return Ok(());
-            }
-            let content = {
-                pbft_write.step = Step::ReceivingPrepare;
-                pbft_write.start_time = get_current_timestamp().unwrap();
-                pbft_write.prepares.clear();
-                pbft_write.commits.clear();
-
-                let transactions: Vec<_> = state_write.request_buffer.iter()
-                    .map(|req| req.transaction.clone())
-                    .collect();
-
-                let mut preprepare = PrePrepare {
-                    view_number: pbft_write.view_number,
-                    sequence_number: pbft_write.sequence_number + 1,
-                    digest: Request::digest_requests(&state_write.request_buffer)?,
-                    node_id: client.local_node_id,
-                    signature: Vec::new(),
-                    requests: state_write.request_buffer.clone(),
-                    block: state_write.rocksdb.create_block(&transactions)?,
-                };
-
-                sign_preprepare(&client.private_key, &mut preprepare)?;
-                pbft_write.preprepare = Some(preprepare.clone());
-
-                let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
-                content
+            let mut preprepare = PrePrepare {
+                view_number: pbft_write.view_number,
+                sequence_number: pbft_write.sequence_number + 1,
+                digest: Request::digest_requests(&state_write.request_buffer)?,
+                node_id: client.local_node_id,
+                signature: Vec::new(),
+                requests: state_write.request_buffer.clone(),
+                block: state_write.rocksdb.create_block(&transactions)?,
             };
 
-            println!("发送 PrePrepare 消息");
-            let multicast_addr = constant_config.multi_cast_addr
-                .parse::<SocketAddr>()
-                .map_err(|e| e.to_string())?;
-            send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
-        }
+            sign_preprepare(&client.private_key, &mut preprepare)?;
+            pbft_write.preprepare = Some(preprepare.clone());
+
+            let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
+            content
+        };
+
+        println!("发送 PrePrepare 消息");
+        let multicast_addr = constant_config.multi_cast_addr
+            .parse::<SocketAddr>()
+            .map_err(|e| e.to_string())?;
+        send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
+    }
 
     Ok(())
 }
@@ -252,15 +256,21 @@ pub async fn preprepare_handler(
     reset_sender: mpsc::Sender<()>,
     mut preprepare: PrePrepare,
 ) -> Result<(), String> {
-    if !client.is_primarry(variable_config.read().await.view_number)
-        && preprepare.view_number == variable_config.read().await.view_number
-        && preprepare.sequence_number == pbft.read().await.sequence_number + 1
+    
+    let variable_config_read = variable_config.read().await;
+    let state_read = state.read().await;
+    let mut pbft_write = pbft.write().await;
+
+    if !client.is_primarry(variable_config_read.view_number)
+        && preprepare.view_number == variable_config_read.view_number
+        && preprepare.sequence_number == pbft_write.sequence_number + 1
+        && preprepare.block.previous_hash == state_read.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.hash
         && verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)?
     {
         println!("接收 PrePrepare 消息");
         reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
 
-        let mut pbft_write = pbft.write().await;
+        
 
         if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
             && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
@@ -311,9 +321,10 @@ pub async fn prepare_handler(
     reset_sender: mpsc::Sender<()>,
     mut prepare: Prepare,
 ) -> Result<(), String> {
-    if verify_prepare(&client.identities[prepare.node_id as usize].public_key, &mut prepare)? {
-        println!("接收 Prepare 消息");
+    println!("接收 Prepare 消息");
 
+    if verify_prepare(&client.identities[prepare.node_id as usize].public_key, &mut prepare)? {
+    
         let mut pbft_write = pbft.write().await;
 
         if pbft_write.step != Step::ReceivingPrepare || pbft_write.prepares.contains(&prepare.node_id) {
@@ -349,6 +360,7 @@ pub async fn prepare_handler(
 
     Ok(())
 }
+
 pub async fn commit_handler(
     constant_config : Arc<ConstantConfig>,
     variable_config : Arc<RwLock<VariableConfig>>,
@@ -358,9 +370,11 @@ pub async fn commit_handler(
     reset_sender: mpsc::Sender<()>,
     mut commit: Commit,
 ) -> Result<(), String> {
-    if verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? {
-        println!("接收 Commit 消息");
+    println!("接收 Commit 消息");
 
+    if verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? {
+        
+        let variable_config_read = variable_config.read().await;
         let mut state_write = state.write().await;
         let mut pbft_write = pbft.write().await;
         
@@ -377,7 +391,7 @@ pub async fn commit_handler(
         pbft_write.sequence_number += 1;
         if let Some(preprepare) = &pbft_write.preprepare {
             state_write.rocksdb.put_block(&preprepare.block)?;
-            if client.is_primarry(variable_config.read().await.view_number) {
+            if client.is_primarry(variable_config_read.view_number) {
                 state_write.request_buffer.drain(0..preprepare.requests.len());
             }
         }
@@ -409,10 +423,14 @@ pub async fn hearbeat_handler(
     reset_sender: mpsc::Sender<()>,
     mut heartbeat: Hearbeat,
 ) -> Result<(), String> {
+
+    let variable_config_read = variable_config.read().await;
     let mut pbft_write = pbft.write().await;
-    if heartbeat.view_number == variable_config.read().await.view_number
+
+    if heartbeat.view_number == variable_config_read.view_number
         && pbft_write.step == Step::Ok
-        && verify_heartbeat(&client.identities[(variable_config.read().await.view_number % client.nodes_number) as usize].public_key, &mut heartbeat)? {
+        && verify_heartbeat(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut heartbeat)? 
+    {
         // println!("接收到合法 Hearbeat 消息");
         pbft_write.step = Step::Ok;
         reset_sender.send(()).await.map_err(|e| e.to_string())?; // 重置视图切换计时器

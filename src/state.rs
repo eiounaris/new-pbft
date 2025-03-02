@@ -1,4 +1,3 @@
-
 use crate::message::Request;
 use crate::store::RocksDBBlockStore;
 
@@ -18,8 +17,5 @@ impl State {
     /// 添加待处理请求添加到请求缓冲池
     pub fn add_request(&mut self, request: Request) {
         self.request_buffer.push(request);
-    } 
-    pub fn add_requests(&mut self, request: &mut Vec<Request>) {
-        self.request_buffer.append(request);
     }
 }

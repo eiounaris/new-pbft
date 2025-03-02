@@ -1,6 +1,5 @@
 #![allow(dead_code, unused_variables)]
 
-
 // main.rs
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -15,19 +14,7 @@ async fn main() -> Result<(), String> {
             reset_sender, 
             reset_receiver,
         )) => {
-
-            // 视图请求
-            tokio::spawn({
-                let constant_config = constant_config.clone();
-                let client = client.clone();
-                let pbft = pbft.clone();
-                async move {
-                    if let Err(e) = new_pbft::view_request(constant_config, client, pbft).await {
-                        eprintln!("{e:?}");
-                    }
-                }
-            });
-
+            
             // 消息处理
             let recv_task = tokio::spawn({
                 let constant_config = constant_config.clone();
@@ -37,7 +24,31 @@ async fn main() -> Result<(), String> {
                 let pbft = pbft.clone();
                 let reset_sender = reset_sender.clone();
                 async move {
-                    if let Err(e) = new_pbft::handle_message(constant_config, variable_config, client, state, pbft, reset_sender).await {
+                    if let Err(e) = new_pbft::handle_message(
+                        constant_config, 
+                        variable_config, 
+                        client, 
+                        state, 
+                        pbft, 
+                        reset_sender
+                    ).await {
+                        eprintln!("{e:?}");
+                    }
+                }
+            });
+
+            // 视图请求
+            tokio::spawn({
+                let constant_config = constant_config.clone();
+                let client = client.clone();
+                let pbft = pbft.clone();
+                async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await; // 硬编码，一秒之后获取视图编号
+                    if let Err(e) = new_pbft::view_request(
+                        constant_config, 
+                        client,
+                        pbft
+                    ).await {
                         eprintln!("{e:?}");
                     }
                 }
@@ -51,7 +62,12 @@ async fn main() -> Result<(), String> {
                 let pbft = pbft.clone();
                 async move {
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
-                    if let Err(e) = new_pbft::heartbeat(constant_config, variable_config, client, pbft).await {
+                    if let Err(e) = new_pbft::heartbeat(
+                        constant_config, 
+                        variable_config, 
+                        client, 
+                        pbft
+                    ).await {
                         eprintln!("{e:?}");
                     }
                 }
@@ -65,7 +81,13 @@ async fn main() -> Result<(), String> {
                 let pbft = pbft.clone();
                 async move {
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
-                    if let Err(e) = new_pbft::view_change(constant_config, variable_config, client, pbft, reset_receiver).await {
+                    if let Err(e) = new_pbft::view_change(
+                        constant_config, 
+                        variable_config, 
+                        client, 
+                        pbft, 
+                        reset_receiver
+                    ).await {
                         eprintln!("{e:?}");
                     }
                 }
@@ -79,7 +101,11 @@ async fn main() -> Result<(), String> {
                 let state = state.clone();
                 async move {
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
-                    if let Err(e) = new_pbft::send_message(constant_config, client, state).await {
+                    if let Err(e) = new_pbft::send_message(
+                        constant_config, 
+                        client, 
+                        state
+                    ).await {
                         eprintln!("{e:?}");
                     }
                 }
