@@ -371,7 +371,7 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::view_request_handler(constant_config, variable_config, client, state, pbft, reset_sender, view_request).await {
+                            if let Err(e) = message::view_request_handler(constant_config, variable_config, client, state, pbft, reset_sender, view_request, src_socket_addr).await {
                                 eprintln!("{e:?}");
                             }
                         }
@@ -388,7 +388,7 @@ pub async fn handle_message(
                         let pbft = pbft.clone();
                         let reset_sender = reset_sender.clone();
                         async move {
-                            if let Err(e) = message::view_response_handler(constant_config, variable_config, client, state, pbft, reset_sender, view_response).await {
+                            if let Err(e) = message::view_response_handler(constant_config, variable_config, client, state, pbft, reset_sender, view_response, src_socket_addr).await {
                                 eprintln!("{e:?}");
                             }
                         }

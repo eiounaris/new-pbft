@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
+use tokio::fs;
 
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 /// 消息类型（待调整）
@@ -133,6 +135,8 @@ pub struct ViewRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViewResponse {
     pub view_number: u64,
+    pub node_id: u64,
+    pub signature: Vec<u8>, // -> all
 }
 
 ///
@@ -448,8 +452,24 @@ pub async fn view_request_handler(
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
     view_request: ViewRequest,
+    src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
-    println!("接收到 ViewRequest 消息");
+    println!("接收 ViewRequest 消息");
+
+
+    println!("发送 ViewResponse 消息");
+    let mut view_response = ViewResponse {
+        view_number: variable_config.read().await.view_number,
+        node_id: client.local_node_id,
+        signature: Vec::new(),
+    };
+    sign_view_response(&client.private_key, &mut view_response)?;
+    send_udp_data(
+        &client.local_udp_socket,
+       &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
+        MessageType::ViewResponse,
+        &bincode::serialize(&view_response).map_err(|e| e.to_string())?,
+    ).await;
 
     Ok(())
 }
@@ -460,9 +480,49 @@ pub async fn view_response_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    view_response: ViewResponse,
+    mut view_response: ViewResponse,
+    src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
     println!("接收到 ViewResponse 消息");
+
+    let mut variable_config_write = variable_config.write().await;
+    let mut pbft_write = pbft.write().await;
+
+    if pbft_write.step != Step::ReceivingViewResponse {
+        return Ok(())
+    }
+    let hashset = pbft_write.view_change_mutiple_set
+        .entry(view_response.view_number)
+        .or_insert(HashSet::new());
+    if !hashset.contains(&view_response.node_id) 
+        && verify_view_response(&client.identities[view_response.node_id as usize].public_key, &mut view_response)? 
+    {
+        hashset.insert(view_response.node_id);
+        if hashset.len() < 2 * ((client.identities.len() - 1) / 3) + 1 {
+            return Ok(())
+        }
+        println!("切换视图为：{}", view_response.view_number);
+        
+        variable_config_write.view_number = view_response.view_number;
+        let variable_config_file = VariableConfig{
+            view_number: variable_config_write.view_number,
+        };
+        let variable_config_json = serde_json::to_string_pretty(&variable_config_file)
+            .map_err(|e| e.to_string())?;
+        fs::write(&constant_config.variable_config_path, &variable_config_json).await
+            .map_err(|e| e.to_string())?;
+
+
+        // println!("发送 StateRequest 消息");
+        // let target_udp_socket = format!("{}:{}", 
+        //     &client.identities[(variable_config_write.view_number % client.nodes_number) as usize].ip, 
+        //     &client.identities[(variable_config_write.view_number % client.nodes_number) as usize].port)
+        //     .parse::<SocketAddr>()
+        //     .map_err(|e| e.to_string())?;
+        // send_udp_data(&client.local_udp_socket, &target_udp_socket, MessageType::StateRequest, &Vec::new()).await;
+
+        // pbft_write.step = Step::ReceivingStateResponse
+    }
 
     Ok(())
 }

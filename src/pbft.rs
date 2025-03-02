@@ -26,7 +26,7 @@ pub struct Pbft {
     pub preprepare: Option<PrePrepare>,
     pub prepares: HashSet<u64>,
     pub commits: HashSet<u64>,
-    pub view_change_mutiple_set: HashMap<u64, HashSet<u64>>, 
+    pub view_change_mutiple_set: HashMap<u64, HashSet<u64>>,
 }
 impl Pbft {
     /// 初始化pbft共识状态

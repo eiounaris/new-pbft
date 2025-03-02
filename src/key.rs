@@ -134,3 +134,18 @@ pub fn verify_new_view(pub_key: &RsaPublicKey, new_view: &mut NewView) -> Result
     new_view.signature = signature;
     verify_signature(pub_key, &bincode_data, &new_view.signature)
 }
+
+
+/// 签名视图请求响应消息
+pub fn sign_view_response(priv_key: &RsaPrivateKey, view_response: &mut ViewResponse) -> Result<(), String> {
+    view_response.signature = sign_data(priv_key, &bincode::serialize(&view_response).map_err(|e| e.to_string())?)?;
+    Ok(())
+}
+/// 验证视图请求消息
+pub fn verify_view_response(pub_key: &RsaPublicKey, view_response: &mut ViewResponse) -> Result<bool, String> {
+    let signature = view_response.signature.clone();
+    view_response.signature = Vec::new();
+    let bincode_data = &bincode::serialize(&view_response).map_err(|e| e.to_string())?;
+    view_response.signature = signature;
+    verify_signature(pub_key, &bincode_data, &view_response.signature)
+}

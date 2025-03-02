@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use rsa::{pkcs1::DecodeRsaPublicKey, RsaPublicKey};
 use tokio::fs::read_to_string;
 // ---
@@ -40,6 +40,7 @@ pub struct ConstantConfig {
     pub multi_cast_ip: String,
     pub multi_cast_port: u64,
     pub block_size: u64,
+    pub variable_config_path: String,
 }
 impl ConstantConfig {
     /// 从文件加载持久配置
@@ -51,7 +52,7 @@ impl ConstantConfig {
 }
 
 /// 动态配置（fine）
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct VariableConfig {
     pub view_number: u64,
 }
