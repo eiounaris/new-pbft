@@ -474,12 +474,17 @@ pub async fn view_request_handler(
     view_request: ViewRequest,
     src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
-    println!("接收 ViewRequest 消息");
+    
+    let variable_config_read = variable_config.read().await;
 
+    if pbft.read().await.step == Step::ReceivingViewResponse {
+        return Ok(())
+    }
+    println!("接收 ViewRequest 消息");
 
     println!("发送 ViewResponse 消息");
     let mut view_response = ViewResponse {
-        view_number: variable_config.read().await.view_number,
+        view_number: variable_config_read.view_number,
         node_id: client.local_node_id,
         signature: Vec::new(),
     };
