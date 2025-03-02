@@ -250,49 +250,51 @@ pub async fn preprepare_handler(
     reset_sender: mpsc::Sender<()>,
     mut preprepare: PrePrepare,
 ) -> Result<(), String> {
-    if !client.is_primarry(variable_config.read().await.view_number) {
-        if verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)? {
-            println!("接收 PrePrepare 消息");
-            reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
+    if !client.is_primarry(variable_config.read().await.view_number)
+        && preprepare.view_number == variable_config.read().await.view_number
+        && preprepare.sequence_number == pbft.read().await.sequence_number + 1
+        && verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)?
+    {
+        println!("接收 PrePrepare 消息");
+        reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
 
-            let mut pbft_write = pbft.write().await;
+        let mut pbft_write = pbft.write().await;
 
-            if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
-                && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
-            {
-                pbft_write.step = Step::OK;
-            }
-
-            if pbft_write.step != Step::OK {
-                return Ok(());
-            }
-            let content = {
-                pbft_write.step = Step::ReceivingPrepare;
-                pbft_write.start_time = get_current_timestamp().unwrap();
-                pbft_write.preprepare = Some(preprepare.clone());
-                pbft_write.prepares.clear();
-                pbft_write.commits.clear();
-                
-                let mut prepare = Prepare {
-                    view_number: pbft_write.view_number,
-                    sequence_number: pbft_write.sequence_number,
-                    digest: preprepare.digest,
-                    node_id: client.local_node_id,
-                    signature: Vec::new(),
-                };
-                sign_prepare(&client.private_key, &mut prepare)?;
-                pbft_write.prepares.insert(client.local_node_id);
-
-                let content = bincode::serialize(&prepare).map_err(|e| e.to_string())?;
-                content
-            };
-
-            println!("发送 Prepare 消息");
-            let multicast_addr = constant_config.multi_cast_addr
-                .parse::<SocketAddr>()
-                .map_err(|e| e.to_string())?;
-            send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Prepare, &content).await;
+        if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
+            && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
+        {
+            pbft_write.step = Step::OK;
         }
+
+        if pbft_write.step != Step::OK {
+            return Ok(());
+        }
+        let content = {
+            pbft_write.step = Step::ReceivingPrepare;
+            pbft_write.start_time = get_current_timestamp().unwrap();
+            pbft_write.preprepare = Some(preprepare.clone());
+            pbft_write.prepares.clear();
+            pbft_write.commits.clear();
+            
+            let mut prepare = Prepare {
+                view_number: pbft_write.view_number,
+                sequence_number: pbft_write.sequence_number,
+                digest: preprepare.digest,
+                node_id: client.local_node_id,
+                signature: Vec::new(),
+            };
+            sign_prepare(&client.private_key, &mut prepare)?;
+            pbft_write.prepares.insert(client.local_node_id);
+
+            let content = bincode::serialize(&prepare).map_err(|e| e.to_string())?;
+            content
+        };
+
+        println!("发送 Prepare 消息");
+        let multicast_addr = constant_config.multi_cast_addr
+            .parse::<SocketAddr>()
+            .map_err(|e| e.to_string())?;
+        send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Prepare, &content).await;
     }
 
     Ok(())

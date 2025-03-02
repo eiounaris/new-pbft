@@ -148,12 +148,11 @@ pub async fn send_message(
 
                             sleep(interval).await;
                         }
-                        
                     }
                 });
                 
                 sleep(interval * 100).await;
-                // println!("第 {} 次请求完成", i + 1);
+                println!("第 {} 次请求完成", (i + 1) * 100);
             }
             sleep(Duration::from_secs(1)).await;
             if let Some(end_block) = state.read().await.rocksdb.get_last_block().unwrap() {
