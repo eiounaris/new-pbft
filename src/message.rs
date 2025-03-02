@@ -525,7 +525,7 @@ pub async fn view_response_handler(
             return Ok(())
         }
 
-        if view_response.view_number == variable_config_write.view_number {
+        if view_response.view_number == variable_config_write.view_number && client.is_primarry(variable_config_write.view_number) {
             pbft_write.step = Step::Ok;
             return Ok(())
         }
