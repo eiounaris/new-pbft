@@ -612,12 +612,13 @@ pub async fn state_response_handler(
         &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, 
         &mut state_response)?
     {
-        println!("发送 SyncRequest 消息");
-
+        
         let sysnc_request = SyncRequest {
             from_index: pbft_read.sequence_number + 1,
             to_index: state_response.sequence_number,
         };
+
+        println!("发送 SyncRequest 消息,{:?}", sysnc_request);
 
         send_udp_data(
             &client.local_udp_socket,
@@ -647,12 +648,12 @@ pub async fn sync_request_handler(
         .get_blocks_in_range(sync_request.from_index, min(sync_request.to_index, sync_request.from_index + 100))?
         .ok_or_else(|| "区间查询无区块")?;
 
-    println!("发送 SyncResponse 消息");
-
     let mut sync_response = SyncResponse {
         blocks: blocks,
         signature: Vec::new(),
     };
+
+    println!("发送 SyncResponse 消息, {:?}", sync_response.blocks);
 
     sign_sync_response(&client.private_key, &mut sync_response)?;
 
