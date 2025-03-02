@@ -10,6 +10,7 @@ pub enum Step {
     ReceivingStateResponse = 1,
 
     ViewChanging = 2,
+    ReceiveingViewChang = 3,
 
     Ok = 4,
     ReceivingPrepare = 5,

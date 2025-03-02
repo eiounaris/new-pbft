@@ -36,6 +36,17 @@ use std::str::FromStr;
 use std::net::SocketAddr;
 
 
+
+
+
+
+
+
+
+
+
+
+
 /// PBFT 初始化函数（fine）
 pub async fn init() -> Result<(
     Arc<ConstantConfig>, 
@@ -45,6 +56,7 @@ pub async fn init() -> Result<(
     tokio::sync::mpsc::Sender<()>, 
     tokio::sync::mpsc::Receiver<()>
 ), String> {
+
     // 加载环境变量
     dotenv().ok();
     let local_node_id = env::var("local_node_id")
@@ -61,6 +73,7 @@ pub async fn init() -> Result<(
         .map_err(|e| e.to_string())?;
     let public_key_path = env::var("public_key_path")
         .map_err(|e| e.to_string())?;
+
     // 加载初始信息
     let identities = Identity::load_identity_config(identity_config_path).await?;
     let constant_config = ConstantConfig::load_constant_config(constant_config_path).await?;
@@ -70,6 +83,7 @@ pub async fn init() -> Result<(
     let local_identitiy = identities.iter()
         .find(|identity| identity.node_id == local_node_id)
         .ok_or_else(|| "节点身份文件缺失当前节点信息！！！")?;
+
     // 创建广播套接字
     let udp_socket = UdpSocket::bind(format!("{}:{}", "0.0.0.0", constant_config.multi_cast_port)).await
         .map_err(|e| e.to_string())?;
@@ -80,8 +94,10 @@ pub async fn init() -> Result<(
         .map_err(|e| e.to_string())?;
     udp_socket.set_multicast_loop_v4(false)
         .map_err(|e| e.to_string())?;
+
     // 输出本地节点初始化信息
     println!("本地节点 {} 启动，地址：{}", local_node_id, format!("{}:{}", local_identitiy.ip, local_identitiy.port));
+
     // 创建 client
     let client = Client::new(local_node_id, udp_socket, private_key, public_key, identities);
     // 创建 state
@@ -90,6 +106,7 @@ pub async fn init() -> Result<(
     let pbft = Pbft::new(variable_config.view_number, state.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块！！！")?.index);
     // 创建 channel
     let (reset_sender, reset_receiver) = tokio::sync::mpsc::channel(1);
+
     // 返回初始化信息
     Ok((
         Arc::new(constant_config), 
@@ -103,20 +120,211 @@ pub async fn init() -> Result<(
 }
 
 
+
+
+
+
+
+
+
+// 节点启动，获取视图编号（fine）
+pub async fn view_request (
+    constant_config : Arc<ConstantConfig>,
+    client: Arc<Client>, 
+    pbft: Arc<RwLock<Pbft>>,
+) -> Result<(), String> {
+
+    println!("发送 ViewRequest 消息");
+
+    let multicast_addr = constant_config.multi_cast_addr
+        .parse::<SocketAddr>()
+        .map_err(|e| e.to_string())?;
+
+    send_udp_data(
+        &client.local_udp_socket, 
+        &multicast_addr, 
+        MessageType::ViewRequest, 
+        &Vec::new()
+    ).await;
+
+    sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后如未能得到视图编号，则切换状态 Ok 或 ViewChange
+
+    if pbft.read().await.step == Step::ReceivingViewResponse {
+
+        let mut pbft_write = pbft.write().await;
+        
+        pbft_write.view_change_mutiple_set.clear();
+        pbft_write.step = Step::Ok
+    }
+
+    Ok(())
+}
+
+
+
+
+
+
+
+
+
+
+
+
+/// 主节点定时心跳函数
+pub async fn heartbeat(
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
+    client: Arc<Client>, 
+    pbft: Arc<RwLock<Pbft>>,
+) -> Result<(), String> {
+
+    let mut interval = interval(Duration::from_secs(1)); // 硬编码心跳间隔
+    interval.reset(); // 确保 interval 不会立即执行
+
+    loop {
+        tokio::select! {
+            _ = interval.tick() => {
+
+                let variable_config_read = variable_config.read().await;
+
+                if client.is_primarry(variable_config_read.view_number) {
+                    // println!("主节点发送 Hearbeat 消息");
+                    let mut heartbeat = Hearbeat {
+                        view_number: variable_config_read.view_number,
+                        sequence_number: pbft.read().await.sequence_number,
+                        node_id: client.local_node_id,
+                        signature: Vec::new(),
+                    };
+
+                    sign_heartbeat(&client.private_key, &mut heartbeat)?;
+
+                    send_udp_data(
+                        &client.local_udp_socket,
+                       &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
+                        MessageType::Hearbeat,
+                        &bincode::serialize(&heartbeat).map_err(|e| e.to_string())?,
+                    ).await;
+                }
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+/// 从节点定时视图切换函数
+pub async fn view_change(
+    constant_config : Arc<ConstantConfig>,
+    variable_config : Arc<RwLock<VariableConfig>>,
+    client: Arc<Client>, 
+    pbft: Arc<RwLock<Pbft>>,
+    mut reset_receiver: mpsc::Receiver<()>,
+) -> Result<(), String> {
+
+    let mut interval = tokio::time::interval(Duration::from_secs(2)); // 硬编码视图切换时间
+    interval.reset(); // 确保 interval 不会立即执行
+
+    loop {
+        tokio::select! {
+            _ = interval.tick() => {
+
+                let variable_config_read = variable_config.read().await;
+
+                if !client.is_primarry(variable_config_read.view_number) {
+
+                    let mut pbft_write = pbft.write().await;
+
+                    if pbft_write.step == Step::ReceivingViewResponse
+                        && pbft_write.step == Step::ReceiveingViewChang
+                    {
+                       continue
+                    }
+
+                    pbft_write.step = Step::ViewChanging;
+                    
+                    let num: u64 = rand::random::<u64>() % 1000; // 生成 0 到 1000 之间的随机整数
+                    sleep(Duration::from_millis(num)).await;
+
+                    println!("从节点发送 NewView 消息");
+
+                    let mut new_view = NewView {
+                        view_number: variable_config_read.view_number,
+                        sequence_number: pbft_write.sequence_number,
+                        node_id: client.local_node_id,
+                        signature: Vec::new()
+                    };
+
+                    sign_new_view(&client.private_key, &mut new_view)?;
+
+                    send_udp_data(
+                        &client.local_udp_socket,
+                       &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
+                        MessageType::NewView,
+                        &bincode::serialize(&new_view).map_err(|e| e.to_string())?,
+                    ).await;
+                }
+            }
+            _ = reset_receiver.recv() => {
+                interval.reset();
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /// 任务: 发送命令行指令数据，用于测试tps（待修改为高性能 Restful API 供本机用户调用）
 pub async fn send_message(
     constant_config: Arc<ConstantConfig>, 
     client: Arc<Client>, 
     state: Arc<RwLock<State>>
-) -> Result<(), std::string::String> {
+) -> Result<(), String> {
     let stdin = tokio::io::stdin();
     let reader = tokio::io::BufReader::new(stdin);
     let mut lines = reader.lines();
+
     while let Ok(Some(line)) = lines.next_line().await {
         let line = line.trim().to_string();
         if line.is_empty() {
             continue;
         }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+
+        if parts.len() == 1 && parts[0] == "last" {
+            let block = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?;
+            println!("{:?}", block);
+            continue;
+        }
+
+        if parts.len() == 2 && parts[0] == "block" {
+            let Ok(index) = parts[1].parse::<u64>() else { continue };
+            let block = state.read().await.rocksdb.get_block_by_index(index)?.ok_or_else(|| "不存在索引区块")?;
+            println!("{:?}", block);
+            continue;
+        }
+
+
         let mut request = Request {
             transaction: Transaction::Tx0,
             timestamp: get_current_timestamp().unwrap(),
@@ -131,15 +339,12 @@ pub async fn send_message(
             .map_err(|e| e.to_string())?;
         let content = Arc::new(content);
 
-        let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() == 3 && parts[0] == "test" {
             let Ok(count) = parts[1].parse::<u64>() else { continue };
             let Ok(interval_us) = parts[2].parse::<u64>() else { continue };
             let interval = Duration::from_micros(interval_us);
-            let mut old_index = 0;
-            if let Some(old_block) = state.read().await.rocksdb.get_last_block().unwrap() {
-                old_index = old_block.index;
-            }
+
+            let old_index = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.index;
             for i in 0..count/100 {
                 tokio::spawn({
                     let client = client.clone();
@@ -161,22 +366,20 @@ pub async fn send_message(
                 sleep(interval * 100).await;
                 println!("第 {} 次请求完成", (i + 1) * 100);
             }
+
             sleep(Duration::from_secs(1)).await;
-            if let Some(end_block) = state.read().await.rocksdb.get_last_block().unwrap() {
-                if let Some(begin_block) = state.read().await.rocksdb.get_block_by_index(old_index + 1).unwrap() {
-                    println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);
-                    println!("begin_timestamp: {}, end_timestamp: {}", begin_block.timestamp, end_block.timestamp);
-                    println!("blocksize: {}", constant_config.block_size);
-                    println!("tps = {}", (
-                        end_block.index - begin_block.index) as f64  
-                        * end_block.transactions.len() as f64 
-                        / (end_block.timestamp - begin_block.timestamp) as f64
-                    );
-                } else {
-                    eprintln!("缺失开始索引区块");
-                }
+            let end_block = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?;
+            if let Some(begin_block) = state.read().await.rocksdb.get_block_by_index(old_index + 1).unwrap() {
+                println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);
+                println!("begin_timestamp: {}, end_timestamp: {}", begin_block.timestamp, end_block.timestamp);
+                println!("blocksize: {}", constant_config.block_size);
+                println!("tps = {}", (
+                    end_block.index - begin_block.index) as f64  
+                    * end_block.transactions.len() as f64 
+                    / (end_block.timestamp - begin_block.timestamp) as f64
+                );
             } else {
-                eprintln!("缺失创世区块");
+                eprintln!("测试未生成新区快");
             }
         } else {
             send_udp_data(
@@ -187,8 +390,25 @@ pub async fn send_message(
             ).await;
         }
     }
+
     Ok(())
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /// 任务: 接收并处理数据
@@ -537,7 +757,8 @@ pub async fn handle_message(
                                 state, 
                                 pbft, 
                                 reset_sender, 
-                                state_request
+                                state_request,
+                                src_socket_addr
                             ).await {
                                 eprintln!("{e:?}");
                             }
@@ -565,7 +786,8 @@ pub async fn handle_message(
                                 state, 
                                 pbft, 
                                 reset_sender, 
-                                state_response
+                                state_response,
+                                src_socket_addr
                             ).await {
                                 eprintln!("{e:?}");
                             }
@@ -593,7 +815,8 @@ pub async fn handle_message(
                                 state, 
                                 pbft, 
                                 reset_sender, 
-                                sync_request
+                                sync_request,
+                                src_socket_addr,
                             ).await {
                                 eprintln!("{e:?}");
                             }
@@ -636,112 +859,4 @@ pub async fn handle_message(
             }
         }
     }
-}
-
-
-/// 主节点定时心跳函数
-pub async fn heartbeat(
-    constant_config : Arc<ConstantConfig>,
-    variable_config : Arc<RwLock<VariableConfig>>,
-    client: Arc<Client>, 
-    pbft: Arc<RwLock<Pbft>>,
-) -> Result<(), String> {
-    let mut interval = interval(Duration::from_secs(1)); // 硬编码心跳间隔
-    interval.reset(); // 确保 interval 不会立即执行
-    loop {
-        tokio::select! {
-            _ = interval.tick() => {
-                let variable_config_read = variable_config.read().await;
-                if client.is_primarry(variable_config_read.view_number) {
-                    // println!("主节点发送 Hearbeat 消息");
-                    let mut heartbeat = Hearbeat {
-                        view_number: variable_config_read.view_number,
-                        sequence_number: pbft.read().await.sequence_number,
-                        node_id: client.local_node_id,
-                        signature: Vec::new(),
-                    };
-                    sign_heartbeat(&client.private_key, &mut heartbeat)?;
-                    send_udp_data(
-                        &client.local_udp_socket,
-                       &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
-                        MessageType::Hearbeat,
-                        &bincode::serialize(&heartbeat).map_err(|e| e.to_string())?,
-                    ).await;
-                }
-            }
-        }
-    }
-}
-
-/// 从节点定时视图切换函数
-pub async fn view_change(
-    constant_config : Arc<ConstantConfig>,
-    variable_config : Arc<RwLock<VariableConfig>>,
-    client: Arc<Client>, 
-    pbft: Arc<RwLock<Pbft>>,
-    mut reset_receiver: mpsc::Receiver<()>,
-) -> Result<(), String> {
-    let mut interval = tokio::time::interval(Duration::from_secs(2)); // 硬编码视图切换时间
-    interval.reset(); // 确保 interval 不会立即执行
-    loop {
-        tokio::select! {
-            _ = interval.tick() => {
-                let variable_config_read = variable_config.read().await;
-                if !client.is_primarry(variable_config_read.view_number) {
-                    let mut pbft_write = pbft.write().await;
-                    pbft_write.step = Step::ViewChanging;
-                    
-                    let num: u64 = rand::random::<u64>() % 1000; // 生成 0 到 1000 之间的随机整数
-                    sleep(Duration::from_millis(num)).await;
-
-                    println!("从节点发送 NewView 消息");
-                    let mut new_view = NewView {
-                        view_number: variable_config_read.view_number,
-                        sequence_number: pbft_write.sequence_number,
-                        node_id: client.local_node_id,
-                        signature: Vec::new()
-                    };
-                    sign_new_view(&client.private_key, &mut new_view)?;
-                    send_udp_data(
-                        &client.local_udp_socket,
-                       &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
-                        MessageType::NewView,
-                        &bincode::serialize(&new_view).map_err(|e| e.to_string())?,
-                    ).await;
-                }
-            }
-            _ = reset_receiver.recv() => {
-                interval.reset();
-            }
-        }
-    }
-}
-
-
-// 节点启动，获取视图编号（fine）
-pub async fn view_request (
-    constant_config : Arc<ConstantConfig>,
-    client: Arc<Client>, 
-    pbft: Arc<RwLock<Pbft>>,
-) -> Result<(), String> {
-    println!("发送 ViewRequest 消息");
-
-    let multicast_addr = constant_config.multi_cast_addr
-        .parse::<SocketAddr>()
-        .map_err(|e| e.to_string())?;
-    let content = Vec::new();
-    send_udp_data(
-        &client.local_udp_socket, 
-        &multicast_addr, 
-        MessageType::ViewRequest, 
-        &content
-    ).await;
-
-    sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态
-    let mut pbft_write = pbft.write().await;
-    if pbft_write.step == Step::ReceivingViewResponse {
-        pbft_write.view_change_mutiple_set.clear();
-        pbft_write.step = Step::Ok
-    }
-    Ok(())
 }

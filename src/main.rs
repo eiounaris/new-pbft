@@ -32,7 +32,7 @@ async fn main() -> Result<(), String> {
                         pbft, 
                         reset_sender
                     ).await {
-                        eprintln!("{e:?}");
+                        eprintln!("消息处理出错：{e:?}");
                     }
                 }
             });
@@ -49,54 +49,53 @@ async fn main() -> Result<(), String> {
                         client,
                         pbft
                     ).await {
-                        eprintln!("{e:?}");
+                        eprintln!("视图请求出错：{e:?}");
                     }
                 }
             });
 
             // 主节点心跳
-            let heartbeat_task = tokio::spawn({
-                let constant_config = constant_config.clone();
-                let variable_config = variable_config.clone();
-                let client = client.clone();
-                let pbft = pbft.clone();
-                async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
-                    if let Err(e) = new_pbft::heartbeat(
-                        constant_config, 
-                        variable_config, 
-                        client, 
-                        pbft
-                    ).await {
-                        eprintln!("{e:?}");
-                    }
-                }
-            });
+            // let heartbeat_task = tokio::spawn({
+            //     let constant_config = constant_config.clone();
+            //     let variable_config = variable_config.clone();
+            //     let client = client.clone();
+            //     let pbft = pbft.clone();
+            //     async move {
+            //         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
+            //         if let Err(e) = new_pbft::heartbeat(
+            //             constant_config, 
+            //             variable_config, 
+            //             client, 
+            //             pbft
+            //         ).await {
+            //             eprintln!("主节点心跳出错：{e:?}");
+            //         }
+            //     }
+            // });
 
             // 从节点视图切换
-            let view_change_task = tokio::spawn({
-                let constant_config = constant_config.clone();
-                let variable_config = variable_config.clone();
-                let client = client.clone();
-                let pbft = pbft.clone();
-                async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
-                    if let Err(e) = new_pbft::view_change(
-                        constant_config, 
-                        variable_config, 
-                        client, 
-                        pbft, 
-                        reset_receiver
-                    ).await {
-                        eprintln!("{e:?}");
-                    }
-                }
-            });
+            // let view_change_task = tokio::spawn({
+            //     let constant_config = constant_config.clone();
+            //     let variable_config = variable_config.clone();
+            //     let client = client.clone();
+            //     let pbft = pbft.clone();
+            //     async move {
+            //         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
+            //         if let Err(e) = new_pbft::view_change(
+            //             constant_config, 
+            //             variable_config, 
+            //             client, 
+            //             pbft, 
+            //             reset_receiver
+            //         ).await {
+            //             eprintln!("从节点视图切换出错：{e:?}");
+            //         }
+            //     }
+            // });
 
             // 命令行输入
             let send_task = tokio::spawn({
                 let constant_config = constant_config.clone();
-                let variable_config = variable_config.clone();
                 let client = client.clone();
                 let state = state.clone();
                 async move {
@@ -106,12 +105,26 @@ async fn main() -> Result<(), String> {
                         client, 
                         state
                     ).await {
-                        eprintln!("{e:?}");
+                        eprintln!("命令行输入出错：{e:?}");
                     }
                 }
             });
 
-            // tokio::spawn({
+            // 等待所有任务执行完毕
+            // tokio::try_join!(recv_task, heartbeat_task, view_change_task, send_task).unwrap();
+
+            tokio::try_join!(recv_task, send_task).unwrap();
+        },
+        
+        Err(e) => eprintln!("{e:?}"),
+    }
+    
+    Ok(())
+}
+
+
+
+// tokio::spawn({
             //     let constant_config = constant_config.clone();
             //     let client = client.clone();
             //     let state = state.clone();
@@ -126,14 +139,3 @@ async fn main() -> Result<(), String> {
             //         }
             //     }
             // }); 
-
-
-            // 等待所有任务执行完毕
-            tokio::try_join!(recv_task, heartbeat_task, view_change_task, send_task).unwrap();
-        },
-        
-        Err(e) => eprintln!("{e:?}"),
-    }
-    
-    Ok(())
-}

@@ -150,26 +150,22 @@ pub struct StateRequest {
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateResponse {
+    pub sequence_number: u64,
+    // pub proof: Vec<Commit>,
+    pub signature: Vec<u8>, // -> all
 }
 
 
 /// 同步请求消息（fine）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncRequest {
-    pub view_number: u64,
-    pub sequence_number: u64,
-    pub node_id: u64,
     pub from_index: u64,
     pub to_index: u64,
-    pub signature: Vec<u8>, // -> all
 }
 
 /// 同步响应消息（fine）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncResponse {
-    pub view_number: u64,
-    pub sequence_number: u64,
-    pub node_id: u64,
     pub blocks: Vec<Block>,
     pub signature: Vec<u8>, // -> all
 }
@@ -478,20 +474,18 @@ pub async fn view_request_handler(
     src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
     
-    let variable_config_read = variable_config.read().await;
-
-    if pbft.read().await.step == Step::ReceivingViewResponse {
-        return Ok(())
-    }
     println!("接收 ViewRequest 消息");
 
-    println!("发送 ViewResponse 消息");
+    println!("回应 ViewResponse 消息");
+
     let mut view_response = ViewResponse {
-        view_number: variable_config_read.view_number,
+        view_number: variable_config.read().await.view_number,
         node_id: client.local_node_id,
         signature: Vec::new(),
     };
+
     sign_view_response(&client.private_key, &mut view_response)?;
+
     send_udp_data(
         &client.local_udp_socket,
         &src_socket_addr,
@@ -512,27 +506,31 @@ pub async fn view_response_handler(
     mut view_response: ViewResponse,
     src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
+
     println!("接收到 ViewResponse 消息");
 
     let mut variable_config_write = variable_config.write().await;
     let mut pbft_write = pbft.write().await;
     
-    if pbft_write.step != Step::ReceivingViewResponse {
-        return Ok(())
-    }
     let hashset = pbft_write.view_change_mutiple_set
         .entry(view_response.view_number)
         .or_insert(HashSet::new());
+
     if !hashset.contains(&view_response.node_id) 
         && verify_view_response(&client.identities[view_response.node_id as usize].public_key, &mut view_response)? 
     {
         hashset.insert(view_response.node_id);
+
         if hashset.len() < 2 * ((client.identities.len() - 1) / 3) + 1 {
             return Ok(())
         }
+
+        pbft_write.step = Step::ReceivingStateResponse;
+
         println!("切换视图为：{}", view_response.view_number);
         
         variable_config_write.view_number = view_response.view_number;
+
         let variable_config_file = VariableConfig{
             view_number: variable_config_write.view_number,
         };
@@ -542,15 +540,20 @@ pub async fn view_response_handler(
             .map_err(|e| e.to_string())?;
 
 
-        // println!("发送 StateRequest 消息");
-        // let target_udp_socket = format!("{}:{}", 
-        //     &client.identities[(variable_config_write.view_number % client.nodes_number) as usize].ip, 
-        //     &client.identities[(variable_config_write.view_number % client.nodes_number) as usize].port)
-        //     .parse::<SocketAddr>()
-        //     .map_err(|e| e.to_string())?;
-        // send_udp_data(&client.local_udp_socket, &target_udp_socket, MessageType::StateRequest, &Vec::new()).await;
+        println!("发送 StateRequest 消息");
 
-        // pbft_write.step = Step::ReceivingStateResponse
+        let target_udp_socket = format!("{}:{}", 
+            &client.identities[(variable_config_write.view_number % client.nodes_number) as usize].ip, 
+            &client.identities[(variable_config_write.view_number % client.nodes_number) as usize].port)
+            .parse::<SocketAddr>()
+            .map_err(|e| e.to_string())?;
+
+        send_udp_data(
+            &client.local_udp_socket, 
+            &target_udp_socket,
+             MessageType::StateRequest, 
+             &Vec::new()
+        ).await;
     }
 
     Ok(())
@@ -564,9 +567,27 @@ pub async fn state_request_handler(
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
     state_request: StateRequest,
+    src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
-    println!("接收到 StateRequest 消息");
 
+    println!("接收 StateRequest 消息");
+
+    println!("发送 StateResponse 消息");
+
+    let mut state_response = StateResponse {
+        sequence_number: pbft.read().await.sequence_number,
+        signature: Vec::new(),
+    };
+
+    sign_state_response(&client.private_key, &mut state_response)?;
+
+    send_udp_data(
+        &client.local_udp_socket,
+        &src_socket_addr,
+        MessageType::StateResponse,
+        &bincode::serialize(&state_response).map_err(|e| e.to_string())?,
+    ).await;
+    
     Ok(())
 }
 
@@ -577,9 +598,33 @@ pub async fn state_response_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    state_response: StateResponse,
+    mut state_response: StateResponse,
+    src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
-    println!("接收到 StateReply 消息");
+
+    println!("接收到 StateResponse 消息");
+    
+    let variable_config_read = variable_config.read().await;
+    let pbft_read = pbft.read().await;
+
+    if state_response.sequence_number > pbft_read.sequence_number
+        && verify_state_response(
+        &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, 
+        &mut state_response)?
+    {
+        println!("发送 SyncRequest 消息");
+
+        let sysnc_request = SyncRequest {
+            from_index: pbft_read.sequence_number + 1,
+            to_index: state_response.sequence_number,
+        };
+        send_udp_data(
+            &client.local_udp_socket,
+            &src_socket_addr,
+            MessageType::StateResponse,
+            &bincode::serialize(&state_response).map_err(|e| e.to_string())?,
+        ).await;
+    }
 
     Ok(())
 }
@@ -592,8 +637,30 @@ pub async fn sync_request_handler(
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
     sync_request: SyncRequest,
+    src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
+
     println!("接收到 SyncRequest 消息");
+
+    let blocks = state.read().await.rocksdb
+        .get_blocks_in_range(sync_request.from_index, sync_request.to_index)?
+        .ok_or_else(|| "区间查询无区块")?;
+
+    println!("发送 SyncResponse 消息");
+
+    let mut sync_response = SyncResponse {
+        blocks: blocks,
+        signature: Vec::new(),
+    };
+
+    sign_sync_response(&client.private_key, &mut sync_response)?;
+
+    send_udp_data(
+        &client.local_udp_socket,
+        &src_socket_addr,
+        MessageType::StateResponse,
+        &bincode::serialize(&sync_response).map_err(|e| e.to_string())?,
+    ).await;
 
     Ok(())
 }
@@ -605,9 +672,28 @@ pub async fn sync_response_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    sync_response: SyncResponse,
+    mut sync_response: SyncResponse,
 ) -> Result<(), String> {
+
     println!("接收到 SyncResponse 消息");
+
+    let variable_config_read = variable_config.read().await;
+    let state_read = state.read().await;
+    let pbft_read = pbft.read().await;
+
+    if verify_sync_response(
+        &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, 
+        &mut sync_response)?
+    {
+        println!("正在同步最新区块");
+
+        
+        for block in sync_response.blocks.iter() {
+            state_read.rocksdb.put_block(block)?;
+        }
+        
+        println!("同步最新区块完成");
+    }
 
     Ok(())
 }

@@ -169,3 +169,35 @@ pub fn verify_view_response(pub_key: &RsaPublicKey, view_response: &mut ViewResp
     view_response.signature = signature;
     verify_signature(pub_key, &bincode_data, &view_response.signature)
 }
+
+/// 签名状态请求响应消息
+pub fn sign_state_response(priv_key: &RsaPrivateKey, state_response: &mut StateResponse) -> Result<(), String> {
+    state_response.signature = sign_data(priv_key, &bincode::serialize(&state_response)
+        .map_err(|e| e.to_string())?)?;
+    Ok(())
+}
+/// 验证状态请求消息
+pub fn verify_state_response(pub_key: &RsaPublicKey, state_response: &mut StateResponse) -> Result<bool, String> {
+    let signature = state_response.signature.clone();
+    state_response.signature = Vec::new();
+    let bincode_data = &bincode::serialize(&state_response)
+        .map_err(|e| e.to_string())?;
+    state_response.signature = signature;
+    verify_signature(pub_key, &bincode_data, &state_response.signature)
+}
+
+/// 签名同步请求响应消息
+pub fn sign_sync_response(priv_key: &RsaPrivateKey, sync_response: &mut SyncResponse) -> Result<(), String> {
+    sync_response.signature = sign_data(priv_key, &bincode::serialize(&sync_response)
+        .map_err(|e| e.to_string())?)?;
+    Ok(())
+}
+/// 验证同步请求消息
+pub fn verify_sync_response(pub_key: &RsaPublicKey, sync_response: &mut SyncResponse) -> Result<bool, String> {
+    let signature = sync_response.signature.clone();
+    sync_response.signature = Vec::new();
+    let bincode_data = &bincode::serialize(&sync_response)
+        .map_err(|e| e.to_string())?;
+    sync_response.signature = signature;
+    verify_signature(pub_key, &bincode_data, &sync_response.signature)
+}
