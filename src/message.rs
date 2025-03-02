@@ -319,15 +319,16 @@ pub async fn prepare_handler(
     reset_sender: mpsc::Sender<()>,
     mut prepare: Prepare,
 ) -> Result<(), String> {
-    println!("接收 Prepare 消息");
 
-    if verify_prepare(&client.identities[prepare.node_id as usize].public_key, &mut prepare)? {
+    let mut pbft_write = pbft.write().await;
     
-        let mut pbft_write = pbft.write().await;
+    if pbft_write.step == Step::ReceivingPrepare
+        && !pbft_write.prepares.contains(&prepare.node_id)
+        &&  verify_prepare(&client.identities[prepare.node_id as usize].public_key, &mut prepare)?
+    {
+        
+        println!("接收 Prepare 消息");
 
-        if pbft_write.step != Step::ReceivingPrepare || pbft_write.prepares.contains(&prepare.node_id) {
-            return Ok(())
-        }
         pbft_write.prepares.insert(prepare.node_id);
 
         if pbft_write.prepares.len() < 2 * ((client.identities.len() - 1) / 3) {
