@@ -214,7 +214,7 @@ pub async fn request_handler(
 
                 let mut preprepare = PrePrepare {
                     view_number: pbft_write.view_number,
-                    sequence_number: pbft_write.sequence_number,
+                    sequence_number: pbft_write.sequence_number + 1,
                     digest: Request::digest_requests(&state_write.request_buffer)?,
                     node_id: client.local_node_id,
                     signature: Vec::new(),
