@@ -1,15 +1,15 @@
 #![allow(dead_code, unused_variables)]
 
-mod store;
-mod network;
-mod message;
-mod web;
-mod key;
-mod client;
-mod pbft;
-mod utils;
-mod config;
-mod state;
+pub mod store;
+pub mod network;
+pub mod message;
+pub mod restapi;
+pub mod key;
+pub mod client;
+pub mod pbft;
+pub mod utils;
+pub mod config;
+pub mod state;
 
 use store::{BlockStore, Transaction};
 use utils::get_current_timestamp;
@@ -20,6 +20,7 @@ use client::Client;
 use config::{ConstantConfig, VariableConfig, Identity};
 use state::State;
 use pbft::{Pbft, Step};
+
 
 use tokio::{ net::UdpSocket, io::AsyncBufReadExt};
 use tokio::time::{interval, Duration, sleep};
