@@ -621,7 +621,7 @@ pub async fn state_response_handler(
         send_udp_data(
             &client.local_udp_socket,
             &src_socket_addr,
-            MessageType::StateResponse,
+            MessageType::SyncRequest,
             &bincode::serialize(&state_response).map_err(|e| e.to_string())?,
         ).await;
     }
@@ -658,7 +658,7 @@ pub async fn sync_request_handler(
     send_udp_data(
         &client.local_udp_socket,
         &src_socket_addr,
-        MessageType::StateResponse,
+        MessageType::SyncResponse,
         &bincode::serialize(&sync_response).map_err(|e| e.to_string())?,
     ).await;
 
