@@ -122,6 +122,7 @@ pub async fn send_message(
             .map_err(|e| e.to_string())?;
         let content: Vec<u8> = bincode::serialize(&request)
             .map_err(|e| e.to_string())?;
+        let content = Arc::new(content);
 
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() == 3 && parts[0] == "test" {
@@ -133,12 +134,19 @@ pub async fn send_message(
                 old_index = old_block.index;
             }
             for i in 0..count {
-                send_udp_data(
-                    &client.local_udp_socket,
-                    &multicast_addr,
-                    MessageType::Request,
-                    &content,
-                ).await;
+                tokio::spawn({
+                    let client = client.clone();
+                    let content = content.clone();
+                    async move {
+                        send_udp_data(
+                            &client.local_udp_socket,
+                            &multicast_addr,
+                            MessageType::Request,
+                            &content,
+                        ).await;
+                    }
+                });
+                
                 sleep(interval).await;
                 println!("第 {} 次请求完成", i + 1);
             }
