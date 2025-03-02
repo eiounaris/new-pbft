@@ -50,6 +50,7 @@ async fn main() -> Result<(), String> {
                 let client = client.clone();
                 let pbft = pbft.clone();
                 async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
                     if let Err(e) = new_pbft::heartbeat(constant_config, variable_config, client, pbft).await {
                         eprintln!("{e:?}");
                     }
@@ -63,6 +64,7 @@ async fn main() -> Result<(), String> {
                 let client = client.clone();
                 let pbft = pbft.clone();
                 async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
                     if let Err(e) = new_pbft::view_change(constant_config, variable_config, client, pbft, reset_receiver).await {
                         eprintln!("{e:?}");
                     }
