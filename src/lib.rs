@@ -133,22 +133,27 @@ pub async fn send_message(
             if let Some(old_block) = state.read().await.rocksdb.get_last_block().unwrap() {
                 old_index = old_block.index;
             }
-            for i in 0..count {
+            for i in 0..count/100 {
                 tokio::spawn({
                     let client = client.clone();
                     let content = content.clone();
                     async move {
-                        send_udp_data(
-                            &client.local_udp_socket,
-                            &multicast_addr,
-                            MessageType::Request,
-                            &content,
-                        ).await;
+                        for i in 0..100 {
+                            send_udp_data(
+                                &client.local_udp_socket,
+                                &multicast_addr,
+                                MessageType::Request,
+                                &content,
+                            ).await;
+
+                            sleep(interval).await;
+                        }
+                        
                     }
                 });
                 
-                sleep(interval).await;
-                println!("第 {} 次请求完成", i + 1);
+                sleep(interval * 100).await;
+                // println!("第 {} 次请求完成", i + 1);
             }
             sleep(Duration::from_secs(1)).await;
             if let Some(end_block) = state.read().await.rocksdb.get_last_block().unwrap() {
