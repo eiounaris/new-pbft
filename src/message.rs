@@ -257,11 +257,17 @@ pub async fn preprepare_handler(
     let state_read = state.read().await;
     let mut pbft_write = pbft.write().await;
 
-    if !client.is_primarry(variable_config_read.view_number)
-        && preprepare.view_number == variable_config_read.view_number
-        // && preprepare.sequence_number == pbft_write.sequence_number + 1
-        // && preprepare.block.previous_hash == state_read.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.hash
+
+    if {println!("debug"); !client.is_primarry(variable_config_read.view_number)}
+        && {println!("debug"); preprepare.view_number == variable_config_read.view_number} 
+        && {println!("debug"); preprepare.sequence_number == pbft_write.sequence_number + 1} 
+        && {println!("debug"); preprepare.block.previous_hash == state_read.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.hash} 
         && verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)?
+    // if !client.is_primarry(variable_config_read.view_number)
+    //     && preprepare.view_number == variable_config_read.view_number
+    //     && preprepare.sequence_number == pbft_write.sequence_number + 1
+    //     && preprepare.block.previous_hash == state_read.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.hash
+    //     && verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)?
     {
         println!("接收 PrePrepare 消息");
         reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
