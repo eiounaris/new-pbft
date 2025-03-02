@@ -150,6 +150,7 @@ pub async fn send_message(
                 sleep(interval).await;
                 println!("第 {} 次请求完成", i + 1);
             }
+            sleep(Duration::from_secs(1)).await;
             if let Some(end_block) = state.read().await.rocksdb.get_last_block().unwrap() {
                 if let Some(begin_block) = state.read().await.rocksdb.get_block_by_index(old_index + 1).unwrap() {
                     println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);
