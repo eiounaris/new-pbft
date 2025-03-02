@@ -196,10 +196,10 @@ pub async fn request_handler(
             if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
                 && (get_current_timestamp().unwrap() - pbft_write.start_time > 1)
             {
-                pbft_write.step = Step::OK;
+                pbft_write.step = Step::Ok;
             }
 
-            if pbft_write.step != Step::OK || state_write.request_buffer.len() < constant_config.block_size as usize {
+            if pbft_write.step != Step::Ok || state_write.request_buffer.len() < constant_config.block_size as usize {
                 return Ok(());
             }
             let content = {
@@ -261,10 +261,10 @@ pub async fn preprepare_handler(
         if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
             && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
         {
-            pbft_write.step = Step::OK;
+            pbft_write.step = Step::Ok;
         }
 
-        if pbft_write.step != Step::OK {
+        if pbft_write.step != Step::Ok {
             return Ok(());
         }
         let content = {
@@ -378,7 +378,7 @@ pub async fn commit_handler(
             }
         }
         
-        pbft_write.step = Step::OK;
+        pbft_write.step = Step::Ok;
     }
 
     Ok(())
@@ -405,8 +405,10 @@ pub async fn hearbeat_handler(
     reset_sender: mpsc::Sender<()>,
     mut heartbeat: Hearbeat,
 ) -> Result<(), String> {
-    if heartbeat.view_number == variable_config.read().await.view_number && verify_heartbeat(&client.identities[heartbeat.node_id as usize].public_key, &mut heartbeat)? {
+    if heartbeat.view_number == variable_config.read().await.view_number
+        && verify_heartbeat(&client.identities[(variable_config.read().await.view_number % client.nodes_number) as usize].public_key, &mut heartbeat)? {
         // println!("接收到合法 Hearbeat 消息");
+        pbft.write().await.step = Step::Ok;
         reset_sender.send(()).await.map_err(|e| e.to_string())?; // 重置视图切换计时器
     }
     Ok(())

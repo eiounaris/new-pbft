@@ -563,7 +563,7 @@ pub async fn view_request (
     if pbft.read().await.step == Step::ReceivingViewResponse {
         let mut pbft = pbft.write().await;
         pbft.view_change_mutiple_set.clear();
-        pbft.step = Step::OK
+        pbft.step = Step::Ok
     }
     Ok(())
 }

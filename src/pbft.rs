@@ -11,7 +11,7 @@ pub enum Step {
 
     ViewChanging = 2,
 
-    OK = 4,
+    Ok = 4,
     ReceivingPrepare = 5,
     ReceiveingCommit = 6,
 }
