@@ -270,8 +270,6 @@ pub async fn preprepare_handler(
         println!("接收 PrePrepare 消息");
         reset_sender.send(()).await.unwrap(); // 重置视图切换计时器
 
-        
-
         if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
             && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
         {
@@ -401,6 +399,7 @@ pub async fn commit_handler(
 
     Ok(())
 }
+
 pub async fn reply_handler(
     constant_config : Arc<ConstantConfig>,
     variable_config : Arc<RwLock<VariableConfig>>,
@@ -414,6 +413,7 @@ pub async fn reply_handler(
 
     Ok(())
 }
+
 pub async fn hearbeat_handler(
     constant_config : Arc<ConstantConfig>,
     variable_config : Arc<RwLock<VariableConfig>>,
@@ -451,6 +451,7 @@ pub async fn view_change_handler(
 
     Ok(())
 }
+
 pub async fn new_view_handler(
     constant_config : Arc<ConstantConfig>,
     variable_config : Arc<RwLock<VariableConfig>>,
@@ -464,6 +465,7 @@ pub async fn new_view_handler(
 
     Ok(())
 }
+
 pub async fn view_request_handler(
     constant_config : Arc<ConstantConfig>,
     variable_config : Arc<RwLock<VariableConfig>>,
@@ -498,6 +500,7 @@ pub async fn view_request_handler(
 
     Ok(())
 }
+
 pub async fn view_response_handler(
     constant_config : Arc<ConstantConfig>,
     variable_config : Arc<RwLock<VariableConfig>>,
@@ -565,6 +568,7 @@ pub async fn state_request_handler(
 
     Ok(())
 }
+
 pub async fn state_response_handler(
     constant_config : Arc<ConstantConfig>,
     variable_config : Arc<RwLock<VariableConfig>>,
@@ -578,6 +582,7 @@ pub async fn state_response_handler(
 
     Ok(())
 }
+
 pub async fn sync_request_handler(
     constant_config : Arc<ConstantConfig>,
     variable_config : Arc<RwLock<VariableConfig>>,
@@ -591,6 +596,7 @@ pub async fn sync_request_handler(
 
     Ok(())
 }
+
 pub async fn sync_response_handler(
     constant_config : Arc<ConstantConfig>,
     variable_config : Arc<RwLock<VariableConfig>>,
