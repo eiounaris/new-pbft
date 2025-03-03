@@ -251,7 +251,10 @@ pub async fn view_change(
         tokio::select! {
             _ = interval.tick() => {
 
-                if !client.is_primarry(variable_config.read().await.view_number) {
+                let variable_config_read = variable_config.read().await;
+
+                if !client.is_primarry(variable_config_read.view_number) {
+                    
 
                     let mut pbft_write = pbft.write().await;
 
