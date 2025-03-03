@@ -152,6 +152,8 @@ pub async fn view_request (
 
     let mut pbft_write = pbft.write().await;
 
+    println!("{:?}", pbft_write.step);
+
     if pbft_write.step == Step::ReceivingViewResponse {
 
         pbft_write.view_change_mutiple_set.clear();

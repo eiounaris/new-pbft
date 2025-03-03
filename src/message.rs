@@ -704,15 +704,14 @@ pub async fn sync_response_handler(
     {
         println!("正在同步区块");
 
+        let mut pbft_write = pbft.write().await;
+
         for block in sync_response.blocks.iter() {
-            state_read.rocksdb.put_block(block)?;
+            if state_read.rocksdb.put_block(block)? {
+                pbft_write.sequence_number += 1;
+            }   
         }
 
-        let mut pbft_write = pbft.write().await;
-        pbft_write.sequence_number += sync_response.blocks.len() as u64;
-
-
-    
         println!("再次发送 StateRequest 消息，检查是否完成");
 
         let target_udp_socket = format!("{}:{}",

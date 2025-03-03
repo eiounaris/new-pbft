@@ -27,7 +27,7 @@ pub struct Block {
 
 /// `BlockStore` trait 定义数据库操作接口
 pub trait BlockStore {
-    fn put_block(&self, block: &Block) -> Result<(), String>;
+    fn put_block(&self, block: &Block) -> Result<bool, String>;
     fn get_block_by_index(&self, index: u64) -> Result<Option<Block>, String>;
     fn get_last_block(&self) -> Result<Option<Block>, String>;
     fn get_blocks_in_range(&self, begin_index: u64, end_index: u64) -> Result<Option<Vec<Block>>, String>;
@@ -64,7 +64,7 @@ impl RocksDBBlockStore {
 }
 
 impl BlockStore for RocksDBBlockStore {
-    fn put_block(&self, block: &Block) -> Result<(), String> {
+    fn put_block(&self, block: &Block) -> Result<bool, String> {
         match self.get_last_block()? {
             Some(last_block) => {
                 if last_block.index + 1 == block.index && last_block.hash == block.previous_hash {
@@ -73,8 +73,11 @@ impl BlockStore for RocksDBBlockStore {
                         .map_err(|e| e.to_string())?);
                     batch.put(b"last_block_index", block.index.to_le_bytes());
                     self.db.write(batch)?;
+                    
+                    Ok(true)
+                } else {
+                    Ok(false)
                 }
-                Ok(())
             },
             None => {
                 Err("缺失创世区块".to_string())
