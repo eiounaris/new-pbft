@@ -165,7 +165,7 @@ pub async fn view_request (
         || pbft_write.step == Step::ReceivingStateResponse
         || pbft_write.step == Step::ReceiveingSyncResponse
     {
-        println!("当前状态为：{:?}，区块链同步可能错误", pbft_write.step);
+        println!("当前状态为：{:?}，区块链同步异常", pbft_write.step);
         pbft_write.view_change_mutiple_set.clear();
         pbft_write.step = Step::Ok
     }
@@ -257,7 +257,7 @@ pub async fn view_change(
 
                     let mut pbft_write = pbft.write().await;
 
-                    if pbft_write.step != Step::ReceivingNewView || pbft_write.step != Step::ReceivingViewChange {
+                    if pbft_write.step != Step::ReceivingNewView && pbft_write.step != Step::ReceivingViewChange {
                         pbft_write.step = Step::ReceivingNewView;
                         continue
                     }
@@ -286,8 +286,6 @@ pub async fn view_change(
                         node_id: client.local_node_id,
                         signature: Vec::new()
                     };
-                    
-                    pbft_write.view_change_mutiple_set.entry(new_view.view_number + new_view.node_id).or_default().insert(client.local_node_id);
 
                     sign_new_view(&client.private_key, &mut new_view)?;
 

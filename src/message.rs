@@ -13,6 +13,8 @@ use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 use tokio::fs;
+use tokio::time::sleep;
+use tokio::time::Duration;
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -444,11 +446,84 @@ pub async fn view_change_handler(
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
-    reqview_changeuest: ViewChange,
+    mut view_change: ViewChange,
 ) -> Result<(), String> {
-    println!("接收到 ViewChange 消息");
 
+    let mut variable_config_write = variable_config.write().await;
+    let mut pbft_write = pbft.write().await;
 
+    if pbft_write.step != Step::ReceivingViewChange || pbft_write.new_view_number != view_change.new_view_number{
+        return Ok(())
+    }
+    
+
+    let hashset = pbft_write.view_change_mutiple_set
+        .entry(view_change.new_view_number)
+        .or_insert(HashSet::new());
+
+    if !hashset.contains(&view_change.node_id)
+        && verify_view_change(&client.identities[view_change.node_id as usize].public_key, &mut view_change)?
+    {
+        println!("接收 ViewChange 消息");
+        
+        hashset.insert(view_change.node_id);
+
+        if hashset.len() < 2 * ((client.nodes_number as usize - 1) / 3) {
+            return Ok(())
+        }
+
+        println!("切换视图为：{}", view_change.new_view_number);
+        
+        variable_config_write.view_number = view_change.new_view_number;
+        pbft_write.view_number = view_change.new_view_number;
+
+        let variable_config_file = VariableConfig{
+            view_number: view_change.new_view_number,
+        };
+
+        let variable_config_json = serde_json::to_string_pretty(&variable_config_file)
+            .map_err(|e| e.to_string())?;
+        fs::write(&constant_config.variable_config_path, &variable_config_json).await
+            .map_err(|e| e.to_string())?;
+
+        if client.is_primarry(variable_config_write.view_number) {
+            pbft_write.step = Step::Ok;
+            return Ok(())
+        }
+
+        pbft_write.step = Step::ReceivingStateResponse;
+
+        drop(pbft_write);
+        drop(variable_config_write);
+
+        println!("发送 StateRequest 消息");
+
+        let target_udp_socket = format!("{}:{}",
+            &client.identities[(view_change.new_view_number % client.nodes_number) as usize].ip, 
+            &client.identities[(view_change.new_view_number % client.nodes_number) as usize].port)
+            .parse::<SocketAddr>()
+            .map_err(|e| e.to_string())?;
+
+        send_udp_data(
+            &client.local_udp_socket, 
+            &target_udp_socket,
+             MessageType::StateRequest, 
+             &Vec::new()
+        ).await;
+
+        sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态为 Ok 或 ViewChange
+
+        let mut pbft_write = pbft.write().await;
+
+        if pbft_write.step == Step::ReceivingViewResponse
+            || pbft_write.step == Step::ReceivingStateResponse
+            || pbft_write.step == Step::ReceiveingSyncResponse
+        {
+            println!("当前状态为：{:?}，区块链同步异常", pbft_write.step);
+            pbft_write.view_change_mutiple_set.clear();
+            pbft_write.step = Step::Ok
+        }
+    }
 
     Ok(())
 }
@@ -466,8 +541,7 @@ pub async fn new_view_handler(
     let variable_config_read = variable_config.read().await;
     let mut pbft_write = pbft.write().await;
 
-    if new_view.view_number != pbft_write.view_number  
-        || new_view.sequence_number < pbft_write.sequence_number
+    if new_view.sequence_number < pbft_write.sequence_number
     {
         return Ok(())
     }
@@ -485,7 +559,7 @@ pub async fn new_view_handler(
     pbft_write.step = Step::ReceivingViewChange;
     pbft_write.start_time = get_current_timestamp()?;
     pbft_write.view_change_mutiple_set.clear();
-    pbft_write.new_view_number += new_view.node_id;
+    pbft_write.new_view_number = new_view.view_number + new_view.node_id;
 
     println!("从节点发送 ViewChange 消息");
 
@@ -493,7 +567,7 @@ pub async fn new_view_handler(
         view_number: pbft_write.view_number,
         sequence_number: pbft_write.sequence_number,
         node_id: client.local_node_id,
-        new_view_number: new_view.node_id,
+        new_view_number: pbft_write.new_view_number,
         signature: Vec::new()
     };
 
@@ -502,7 +576,7 @@ pub async fn new_view_handler(
     send_udp_data(
         &client.local_udp_socket,
         &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
-        MessageType::NewView,
+        MessageType::ViewChange,
         &bincode::serialize(&view_change).map_err(|e| e.to_string())?,
     ).await;
     
