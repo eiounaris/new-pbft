@@ -56,7 +56,7 @@ pub struct Request {
     pub signature: Vec<u8>, // -> all
 }
 impl Request {
-    pub fn digest_requests(requests: &Vec<Request>) -> Result<Vec<u8>, String> {
+    pub fn digest_requests(requests: &[Request]) -> Result<Vec<u8>, String> {
         Ok(Sha256::digest(bincode::serialize(&requests).map_err(|e| e.to_string())?).to_vec())
     }
 }
@@ -177,21 +177,23 @@ pub struct SyncResponse {
 
 pub async fn request_handler(
     constant_config : Arc<ConstantConfig>,
-    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
+
+    variable_config : Arc<RwLock<VariableConfig>>,
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
+
     reset_sender: mpsc::Sender<()>,
     mut request: Request,
 ) -> Result<(), String> {
     
-    if client.is_primarry(variable_config.read().await.view_number) 
+    let mut state_write = state.write().await;
+    let mut pbft_write = pbft.write().await;
+
+    if client.is_primarry(pbft_write.view_number)
         && verify_request(&client.identities[request.node_id as usize].public_key, &mut request)?
     {
         println!("接收 Request 消息");
-
-        let mut state_write = state.write().await;
-        let mut pbft_write = pbft.write().await;
 
         if state_write.request_buffer.len() < 3 * (constant_config.block_size as usize) {
             state_write.add_request(request);
@@ -209,6 +211,7 @@ pub async fn request_handler(
         if pbft_write.step != Step::Ok || state_write.request_buffer.len() < constant_config.block_size as usize {
             return Ok(());
         }
+
         let content = {
             pbft_write.step = Step::ReceivingPrepare;
             pbft_write.start_time = get_current_timestamp().unwrap();
@@ -230,6 +233,7 @@ pub async fn request_handler(
             };
 
             sign_preprepare(&client.private_key, &mut preprepare)?;
+
             pbft_write.preprepare = Some(preprepare.clone());
 
             let content = bincode::serialize(&preprepare).map_err(|e| e.to_string())?;
@@ -237,6 +241,7 @@ pub async fn request_handler(
         };
 
         println!("发送 PrePrepare 消息");
+
         let multicast_addr = constant_config.multi_cast_addr
             .parse::<SocketAddr>()
             .map_err(|e| e.to_string())?;
@@ -248,10 +253,12 @@ pub async fn request_handler(
 
 pub async fn preprepare_handler(
     constant_config : Arc<ConstantConfig>,
-    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
+
+    variable_config : Arc<RwLock<VariableConfig>>,
     state: Arc<RwLock<State>>, 
     pbft: Arc<RwLock<Pbft>>,
+
     reset_sender: mpsc::Sender<()>,
     mut preprepare: PrePrepare,
 ) -> Result<(), String> {
@@ -266,7 +273,7 @@ pub async fn preprepare_handler(
     let mut pbft_write = pbft.write().await;
 
     if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
-        && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
+        && (get_current_timestamp().unwrap() - pbft_write.start_time > 1)
     {
         pbft_write.step = Step::Ok;
     }
@@ -430,7 +437,7 @@ pub async fn hearbeat_handler(
     let pbft_read = pbft.read().await;
 
     if heartbeat.view_number == variable_config_read.view_number
-        && pbft_read.step == Step::Ok
+        && pbft_read.step != Step::ReceivingViewChange
         && verify_heartbeat(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut heartbeat)? 
     {
         // println!("接收到合法 Hearbeat 消息");
@@ -451,6 +458,10 @@ pub async fn view_change_handler(
 
     let mut variable_config_write = variable_config.write().await;
     let mut pbft_write = pbft.write().await;
+
+    if client.is_primarry(variable_config_write.view_number) {
+        return Ok(())
+    }
 
     if pbft_write.step != Step::ReceivingViewChange || pbft_write.new_view_number != view_change.new_view_number {
         return Ok(())
@@ -516,10 +527,10 @@ pub async fn view_change_handler(
 
         if pbft_write.step == Step::ReceivingViewResponse
             || pbft_write.step == Step::ReceivingStateResponse
-            || pbft_write.step == Step::ReceiveingSyncResponse
+            || pbft_write.step == Step::ReceivingSyncResponse
         {
-            println!("当前状态为：{:?}，区块链同步异常", pbft_write.step);
-            pbft_write.view_change_mutiple_set.clear();
+            println!("当前状态为：{:?}，区块链同步可能存在异常", pbft_write.step);
+
             pbft_write.step = Step::Ok
         }
     }
@@ -539,6 +550,10 @@ pub async fn new_view_handler(
 
     let variable_config_read = variable_config.read().await;
     let mut pbft_write = pbft.write().await;
+
+    if client.is_primarry(variable_config_read.view_number) {
+        return Ok(())
+    }
 
     if new_view.sequence_number < pbft_write.sequence_number
     {
@@ -755,7 +770,7 @@ pub async fn state_response_handler(
 
         println!("发送 {:?} 消息", sysnc_request);
 
-        pbft_write.step = Step::ReceiveingSyncResponse;
+        pbft_write.step = Step::ReceivingSyncResponse;
 
         send_udp_data(
             &client.local_udp_socket,
@@ -824,7 +839,7 @@ pub async fn sync_response_handler(
     let state_read = state.read().await;
     let mut pbft_write = pbft.write().await;
     
-    if pbft_write.step == Step::ReceiveingSyncResponse
+    if pbft_write.step == Step::ReceivingSyncResponse
     && verify_sync_response(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut sync_response)?
     {
         println!("接收 SyncResponse 消息");

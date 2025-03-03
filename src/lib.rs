@@ -131,20 +131,11 @@ pub async fn init() -> Result<(
 pub async fn view_request (
     constant_config : Arc<ConstantConfig>,
     client: Arc<Client>, 
+
     pbft: Arc<RwLock<Pbft>>,
 ) -> Result<(), String> {
 
-    let mut pbft_write = pbft.write().await;
-
-    if pbft_write.step != Step::Initing {
-        return Ok(())
-    }
-
     println!("广播 ViewRequest 消息");
-
-    pbft_write.step = Step::ReceivingViewResponse;
-
-    drop(pbft_write);
 
     let multicast_addr = constant_config.multi_cast_addr
         .parse::<SocketAddr>()
@@ -157,16 +148,16 @@ pub async fn view_request (
         &Vec::new()
     ).await;
 
-    sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态为 Ok 或 ViewChange
+    sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后检查状态
 
     let mut pbft_write = pbft.write().await;
 
     if pbft_write.step == Step::ReceivingViewResponse
         || pbft_write.step == Step::ReceivingStateResponse
-        || pbft_write.step == Step::ReceiveingSyncResponse
+        || pbft_write.step == Step::ReceivingSyncResponse
     {
-        println!("当前状态为：{:?}，区块链同步异常", pbft_write.step);
-        pbft_write.view_change_mutiple_set.clear();
+        println!("当前状态为：{:?}，区块链同步可能存在异常", pbft_write.step);
+
         pbft_write.step = Step::Ok
     }
 
@@ -187,8 +178,9 @@ pub async fn view_request (
 /// 主节点定时心跳函数
 pub async fn heartbeat(
     constant_config : Arc<ConstantConfig>,
-    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
+
+    variable_config : Arc<RwLock<VariableConfig>>,
     pbft: Arc<RwLock<Pbft>>,
 ) -> Result<(), String> {
 
@@ -199,13 +191,13 @@ pub async fn heartbeat(
         tokio::select! {
             _ = interval.tick() => {
 
-                let variable_config_read = variable_config.read().await;
+                let pbft_read = pbft.read().await;
 
-                if client.is_primarry(variable_config_read.view_number) {
+                if client.is_primarry(pbft_read.view_number) {
                     // println!("主节点发送 Hearbeat 消息");
                     let mut heartbeat = Hearbeat {
-                        view_number: variable_config_read.view_number,
-                        sequence_number: pbft.read().await.sequence_number,
+                        view_number: pbft_read.view_number,
+                        sequence_number: pbft_read.sequence_number,
                         node_id: client.local_node_id,
                         signature: Vec::new(),
                     };
@@ -238,9 +230,11 @@ pub async fn heartbeat(
 /// 从节点定时视图切换函数
 pub async fn view_change(
     constant_config : Arc<ConstantConfig>,
-    variable_config : Arc<RwLock<VariableConfig>>,
     client: Arc<Client>, 
+
+    variable_config : Arc<RwLock<VariableConfig>>,
     pbft: Arc<RwLock<Pbft>>,
+
     mut reset_receiver: mpsc::Receiver<()>,
 ) -> Result<(), String> {
 
@@ -251,24 +245,21 @@ pub async fn view_change(
         tokio::select! {
             _ = interval.tick() => {
 
-                let variable_config_read = variable_config.read().await;
+                let mut pbft_write = pbft.write().await;
 
-                if !client.is_primarry(variable_config_read.view_number) {
+                if !client.is_primarry(pbft_write.view_number) {
+
+                    if pbft_write.step == Step::ReceivingViewResponse
+                        || pbft_write.step == Step::ReceivingStateResponse
+                        || pbft_write.step == Step::ReceivingSyncResponse
+                    {
+                        return Ok(())
+                    }
                     
-
-                    let mut pbft_write = pbft.write().await;
-
                     if pbft_write.step != Step::ReceivingNewView && pbft_write.step != Step::ReceivingViewChange {
                         pbft_write.step = Step::ReceivingNewView;
                         continue
                     }
-
-                    drop(pbft_write);
-
-                    let num: u64 = rand::random::<u64>() % 500; // 生成 0 到 500 之间的随机整数
-                    sleep(Duration::from_millis(num)).await;
-
-                    let mut pbft_write = pbft.write().await;
 
                     if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
                         pbft_write.step = Step::ReceivingNewView;
@@ -277,8 +268,17 @@ pub async fn view_change(
                     if pbft_write.step != Step::ReceivingNewView {
                         continue
                     }
-                    
-                    
+
+                    drop(pbft_write);
+
+                    let num: u64 = rand::random::<u64>() % 1000; // 生成 0 到 1000 之间的随机整数
+                    sleep(Duration::from_millis(num)).await;
+
+                    let mut pbft_write = pbft.write().await;
+
+                    if pbft_write.step != Step::ReceivingNewView {
+                        continue
+                    }
 
                     pbft_write.step = Step::ReceivingViewChange;
                     pbft_write.start_time = get_current_timestamp().unwrap();
@@ -293,6 +293,8 @@ pub async fn view_change(
                         node_id: client.local_node_id,
                         signature: Vec::new()
                     };
+
+                    drop(pbft_write);
 
                     sign_new_view(&client.private_key, &mut new_view)?;
 
@@ -328,6 +330,7 @@ pub async fn view_change(
 pub async fn send_message(
     constant_config: Arc<ConstantConfig>, 
     client: Arc<Client>, 
+
     state: Arc<RwLock<State>>
 ) -> Result<(), String> {
 
@@ -512,8 +515,10 @@ pub async fn handle_message(
                         async move {
                             if let Err(e) = message::request_handler(
                                 constant_config, 
+                                client, 
                                 variable_config, 
-                                client, state, pbft, 
+                                state, 
+                                pbft, 
                                 reset_sender, 
                                 request
                             ).await {
@@ -538,8 +543,9 @@ pub async fn handle_message(
                         async move {
                             if let Err(e) = message::preprepare_handler(
                                 constant_config, 
-                                variable_config, 
                                 client, 
+
+                                variable_config, 
                                 state, 
                                 pbft, 
                                 reset_sender, 
