@@ -257,23 +257,16 @@ pub async fn view_change(
 
                     let mut pbft_write = pbft.write().await;
 
-                    if pbft_write.step == Step::Initing
-                        || pbft_write.step == Step::ReceivingViewResponse
-                        || pbft_write.step == Step::ReceivingStateResponse
-                        || pbft_write.step == Step::ReceiveingSyncResponse
-                        || pbft_write.step == Step::ReceivingViewChange
-                    {
-                       continue
-                    }
-
                     pbft_write.step = Step::ViewChanging;
-                    
+
                     let num: u64 = rand::random::<u64>() % 1000; // 生成 0 到 1000 之间的随机整数
                     sleep(Duration::from_millis(num)).await;
 
-                    println!("从节点发送 NewView 消息");
-
                     pbft_write.step = Step::ReceivingViewChange;
+                    pbft_write.start_time = get_current_timestamp().unwrap();
+                    pbft_write.view_change_mutiple_set.clear();
+
+                    println!("从节点发送 NewView 消息");
 
                     let mut new_view = NewView {
                         view_number: variable_config_read.view_number,

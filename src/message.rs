@@ -424,14 +424,13 @@ pub async fn hearbeat_handler(
 ) -> Result<(), String> {
 
     let variable_config_read = variable_config.read().await;
-    let mut pbft_write = pbft.write().await;
+    let pbft_read = pbft.read().await;
 
     if heartbeat.view_number == variable_config_read.view_number
-        && pbft_write.step == Step::Ok
+        && pbft_read.step == Step::Ok
         && verify_heartbeat(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut heartbeat)? 
     {
         // println!("接收到合法 Hearbeat 消息");
-        pbft_write.step = Step::Ok;
         reset_sender.send(()).await.map_err(|e| e.to_string())?; // 重置视图切换计时器
     }
     Ok(())
