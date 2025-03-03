@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 /// PBFT 共识过程（待调整）
 #[derive(PartialEq, Debug)]
 pub enum Step {
+    Initing = 8,
     ReceivingViewResponse = 0,
     ReceivingStateResponse = 1,
     ReceiveingSyncResponse = 2,
@@ -39,7 +40,7 @@ impl Pbft {
             view_number: view_number,
             sended_view_number: view_number,
             sequence_number: sequence_number,
-            step: Step::ReceivingViewResponse,
+            step: Step::Initing,
             start_time: get_current_timestamp().unwrap(),
             preprepare: None,
             prepares: HashSet::new(),

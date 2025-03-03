@@ -134,7 +134,17 @@ pub async fn view_request (
     pbft: Arc<RwLock<Pbft>>,
 ) -> Result<(), String> {
 
-    println!("发送 ViewRequest 消息");
+    let mut pbft_write = pbft.write().await;
+
+    if pbft_write.step != Step::Initing {
+        return Ok(())
+    }
+
+    println!("广播 ViewRequest 消息");
+
+    pbft_write.step = Step::ReceivingViewResponse;
+
+    drop(pbft_write);
 
     let multicast_addr = constant_config.multi_cast_addr
         .parse::<SocketAddr>()
@@ -147,15 +157,15 @@ pub async fn view_request (
         &Vec::new()
     ).await;
 
-    sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后如未能得到视图编号，则切换状态 Ok 或 ViewChange
+    sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态为 Ok 或 ViewChange
 
     let mut pbft_write = pbft.write().await;
 
-    println!("一秒区块同步后，状态为{:?}", pbft_write.step);
+    println!("初始状态为：{:?}", pbft_write.step);
 
-    if pbft_write.step == Step::ReceivingViewResponse 
-    || pbft_write.step == Step::ReceivingStateResponse
-    || pbft_write.step == Step::ReceiveingSyncResponse
+    if pbft_write.step == Step::ReceivingViewResponse
+        || pbft_write.step == Step::ReceivingStateResponse
+        || pbft_write.step == Step::ReceiveingSyncResponse
     {
 
         pbft_write.view_change_mutiple_set.clear();
@@ -305,6 +315,7 @@ pub async fn send_message(
     client: Arc<Client>, 
     state: Arc<RwLock<State>>
 ) -> Result<(), String> {
+
     let stdin = tokio::io::stdin();
     let reader = tokio::io::BufReader::new(stdin);
     let mut lines = reader.lines();
@@ -318,14 +329,14 @@ pub async fn send_message(
 
         if parts.len() == 1 && parts[0] == "last" {
             let block = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?;
-            println!("{:?}", block);
+            println!("索引为：{:?}, 前哈希为：{:?}，哈希为 ：{:?}", block.index, block.previous_hash, block.hash);
             continue;
         }
 
-        if parts.len() == 2 && parts[0] == "block" {
+        if parts.len() == 2 && parts[0] == "index" {
             let Ok(index) = parts[1].parse::<u64>() else { continue };
             let block = state.read().await.rocksdb.get_block_by_index(index)?.ok_or_else(|| "不存在索引区块")?;
-            println!("{:?}", block);
+            println!("索引为：{:?}, 前哈希为：{:?}，哈希为 ：{:?}", block.index, block.previous_hash, block.hash);
             continue;
         }
 
@@ -336,12 +347,16 @@ pub async fn send_message(
             node_id: client.local_node_id,
             signature: Vec::new(),
         };
+
         sign_request(&client.private_key, &mut request)?;
+
         let multicast_addr = constant_config.multi_cast_addr
             .parse::<SocketAddr>()
             .map_err(|e| e.to_string())?;
+
         let content: Vec<u8> = bincode::serialize(&request)
             .map_err(|e| e.to_string())?;
+
         let content = Arc::new(content);
 
         if parts.len() == 3 && parts[0] == "test" {
@@ -350,7 +365,8 @@ pub async fn send_message(
             let interval = Duration::from_micros(interval_us);
 
             let old_index = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.index;
-            for i in 0..count/100 {
+
+            for i in 0..(count+99)/100 {
                 tokio::spawn({
                     let client = client.clone();
                     let content = content.clone();
@@ -369,11 +385,12 @@ pub async fn send_message(
                 });
                 
                 sleep(interval * 100).await;
-                println!("第 {} 次请求完成", (i + 1) * 100);
             }
 
             sleep(Duration::from_secs(1)).await;
+
             let end_block = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?;
+            
             if let Some(begin_block) = state.read().await.rocksdb.get_block_by_index(old_index + 1).unwrap() {
                 println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);
                 println!("begin_timestamp: {}, end_timestamp: {}", begin_block.timestamp, end_block.timestamp);
@@ -425,11 +442,14 @@ pub async fn handle_message(
     pbft: Arc<RwLock<Pbft>>,
     reset_sender: mpsc::Sender<()>,
 ) -> Result<(), String> {
+
     let mut buf = Box::new([0u8; 102400]);
+    
     loop {
         let (udp_data_size, src_socket_addr) = client.local_udp_socket
             .recv_from(buf.as_mut_slice()).await
             .map_err(|e| e.to_string())?;
+
         // 提取消息类型（第一个字节）
         let message_type = match buf[0] {
             0 => MessageType::Request,
@@ -464,29 +484,27 @@ pub async fn handle_message(
         match message_type {
 
             MessageType::Request => {
-                if let Ok(request) = 
-                    bincode::deserialize::<Request>(content).map_err(|e| e.to_string()) 
-                {
-                    tokio::spawn({
-                        let constant_config = constant_config.clone();
-                        let variable_config = variable_config.clone();
-                        let client = client.clone();
-                        let state = state.clone();
-                        let pbft = pbft.clone();
-                        let reset_sender = reset_sender.clone();
-                        async move {
-                            if let Err(e) = message::request_handler(
-                                constant_config, 
-                                variable_config, 
-                                client, state, pbft, 
-                                reset_sender, 
-                                request
-                            ).await {
-                                eprintln!("{e:?}");
-                            }
+                tokio::spawn({
+                    let request = 
+                        bincode::deserialize::<Request>(content).map_err(|e| e.to_string())?;
+                    let constant_config = constant_config.clone();
+                    let variable_config = variable_config.clone();
+                    let client = client.clone();
+                    let state = state.clone();
+                    let pbft = pbft.clone();
+                    let reset_sender = reset_sender.clone();
+                    async move {
+                        if let Err(e) = message::request_handler(
+                            constant_config, 
+                            variable_config, 
+                            client, state, pbft, 
+                            reset_sender, 
+                            request
+                        ).await {
+                            eprintln!("{e:?}");
                         }
-                    });
-                }
+                    }
+                });
             },
 
             MessageType::PrePrepare => {
