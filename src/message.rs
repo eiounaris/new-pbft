@@ -452,11 +452,10 @@ pub async fn view_change_handler(
     let mut variable_config_write = variable_config.write().await;
     let mut pbft_write = pbft.write().await;
 
-    if pbft_write.step != Step::ReceivingViewChange || pbft_write.new_view_number != view_change.new_view_number{
+    if pbft_write.step != Step::ReceivingViewChange || pbft_write.new_view_number != view_change.new_view_number {
         return Ok(())
     }
     
-
     let hashset = pbft_write.view_change_mutiple_set
         .entry(view_change.new_view_number)
         .or_insert(HashSet::new());

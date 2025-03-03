@@ -251,9 +251,7 @@ pub async fn view_change(
         tokio::select! {
             _ = interval.tick() => {
 
-                let variable_config_read = variable_config.read().await;
-
-                if !client.is_primarry(variable_config_read.view_number) {
+                if !client.is_primarry(variable_config.read().await.view_number) {
 
                     let mut pbft_write = pbft.write().await;
 
@@ -261,6 +259,13 @@ pub async fn view_change(
                         pbft_write.step = Step::ReceivingNewView;
                         continue
                     }
+
+                    drop(pbft_write);
+
+                    let num: u64 = rand::random::<u64>() % 500; // 生成 0 到 500 之间的随机整数
+                    sleep(Duration::from_millis(num)).await;
+
+                    let mut pbft_write = pbft.write().await;
 
                     if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
                         pbft_write.step = Step::ReceivingNewView;
@@ -270,8 +275,7 @@ pub async fn view_change(
                         continue
                     }
                     
-                    let num: u64 = rand::random::<u64>() % 1000; // 生成 0 到 1000 之间的随机整数
-                    sleep(Duration::from_millis(num)).await;
+                    
 
                     pbft_write.step = Step::ReceivingViewChange;
                     pbft_write.start_time = get_current_timestamp().unwrap();
