@@ -55,23 +55,23 @@ async fn main() -> Result<(), String> {
             });
 
             // 主节点心跳
-            // let heartbeat_task = tokio::spawn({
-            //     let constant_config = constant_config.clone();
-            //     let variable_config = variable_config.clone();
-            //     let client = client.clone();
-            //     let pbft = pbft.clone();
-            //     async move {
-            //         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
-            //         if let Err(e) = new_pbft::heartbeat(
-            //             constant_config, 
-            //             variable_config, 
-            //             client, 
-            //             pbft
-            //         ).await {
-            //             eprintln!("主节点心跳出错：{e:?}");
-            //         }
-            //     }
-            // });
+            let heartbeat_task = tokio::spawn({
+                let constant_config = constant_config.clone();
+                let variable_config = variable_config.clone();
+                let client = client.clone();
+                let pbft = pbft.clone();
+                async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
+                    if let Err(e) = new_pbft::heartbeat(
+                        constant_config, 
+                        variable_config, 
+                        client, 
+                        pbft
+                    ).await {
+                        eprintln!("主节点心跳出错：{e:?}");
+                    }
+                }
+            });
 
             // 从节点视图切换
             // let view_change_task = tokio::spawn({

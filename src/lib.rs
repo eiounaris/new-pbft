@@ -258,7 +258,9 @@ pub async fn view_change(
                     let mut pbft_write = pbft.write().await;
 
                     if pbft_write.step == Step::ReceivingViewResponse
-                        && pbft_write.step == Step::ReceiveingViewChang
+                        || pbft_write.step == Step::ReceivingStateResponse
+                        || pbft_write.step == Step::ReceiveingSyncResponse
+                        || pbft_write.step == Step::ReceiveingViewChange
                     {
                        continue
                     }
