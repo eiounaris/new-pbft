@@ -61,7 +61,7 @@ async fn main() -> Result<(), String> {
             //     let client = client.clone();
             //     let pbft = pbft.clone();
             //     async move {
-            //         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
+            //         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
             //         if let Err(e) = new_pbft::heartbeat(
             //             constant_config, 
             //             variable_config, 
@@ -80,7 +80,7 @@ async fn main() -> Result<(), String> {
             //     let client = client.clone();
             //     let pbft = pbft.clone();
             //     async move {
-            //         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
+            //         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
             //         if let Err(e) = new_pbft::view_change(
             //             constant_config, 
             //             variable_config, 
@@ -93,13 +93,29 @@ async fn main() -> Result<(), String> {
             //     }
             // });
 
+            // tokio::spawn({
+            //     let constant_config = constant_config.clone();
+            //     let client = client.clone();
+            //     let state = state.clone();
+            //     async move {
+            //         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
+            //         if let Err(e) = new_pbft::restapi::actix_web_runweb_run(
+            //             constant_config, 
+            //             client, 
+            //             state
+            //         ).await {
+            //             eprintln!("{e:?}");
+            //         }
+            //     }
+            // }); 
+
             // 命令行输入
             let send_task = tokio::spawn({
                 let constant_config = constant_config.clone();
                 let client = client.clone();
                 let state = state.clone();
                 async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
                     if let Err(e) = new_pbft::send_message(
                         constant_config, 
                         client, 
@@ -124,18 +140,4 @@ async fn main() -> Result<(), String> {
 
 
 
-// tokio::spawn({
-            //     let constant_config = constant_config.clone();
-            //     let client = client.clone();
-            //     let state = state.clone();
-            //     async move {
-            //         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await; // 硬编码，等待状态稳定
-            //         if let Err(e) = new_pbft::restapi::actix_web_runweb_run(
-            //             constant_config, 
-            //             client, 
-            //             state
-            //         ).await {
-            //             eprintln!("{e:?}");
-            //         }
-            //     }
-            // }); 
+

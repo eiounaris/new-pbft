@@ -161,13 +161,11 @@ pub async fn view_request (
 
     let mut pbft_write = pbft.write().await;
 
-    println!("初始状态为：{:?}", pbft_write.step);
-
     if pbft_write.step == Step::ReceivingViewResponse
         || pbft_write.step == Step::ReceivingStateResponse
         || pbft_write.step == Step::ReceiveingSyncResponse
     {
-
+        println!("当前状态为：{:?}，区块链同步可能错误", pbft_write.step);
         pbft_write.view_change_mutiple_set.clear();
         pbft_write.step = Step::Ok
     }
@@ -329,14 +327,14 @@ pub async fn send_message(
 
         if parts.len() == 1 && parts[0] == "last" {
             let block = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?;
-            println!("索引为：{:?}, 前哈希为：{:?}，哈希为 ：{:?}", block.index, block.previous_hash, block.hash);
+            println!("索引：{:?}, 前哈希：{:?}，哈希 ：{:?}", block.index, block.previous_hash, block.hash);
             continue;
         }
 
         if parts.len() == 2 && parts[0] == "index" {
             let Ok(index) = parts[1].parse::<u64>() else { continue };
             let block = state.read().await.rocksdb.get_block_by_index(index)?.ok_or_else(|| "不存在索引区块")?;
-            println!("索引为：{:?}, 前哈希为：{:?}，哈希为 ：{:?}", block.index, block.previous_hash, block.hash);
+            println!("索引：{:?}, 前哈希：{:?}，哈希 ：{:?}", block.index, block.previous_hash, block.hash);
             continue;
         }
 
