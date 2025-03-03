@@ -257,23 +257,37 @@ pub async fn view_change(
 
                     let mut pbft_write = pbft.write().await;
 
-                    pbft_write.step = Step::ViewChanging;
+                    if pbft_write.step != Step::ReceivingNewView || pbft_write.step != Step::ReceivingViewChange {
+                        pbft_write.step = Step::ReceivingNewView;
+                        continue
+                    }
 
+                    if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
+                        pbft_write.step = Step::ReceivingNewView;
+                    }
+
+                    if pbft_write.step != Step::ReceivingNewView {
+                        continue
+                    }
+                    
                     let num: u64 = rand::random::<u64>() % 1000; // 生成 0 到 1000 之间的随机整数
                     sleep(Duration::from_millis(num)).await;
 
                     pbft_write.step = Step::ReceivingViewChange;
                     pbft_write.start_time = get_current_timestamp().unwrap();
                     pbft_write.view_change_mutiple_set.clear();
+                    pbft_write.new_view_number = pbft_write.view_number + client.local_node_id;
 
                     println!("从节点发送 NewView 消息");
 
                     let mut new_view = NewView {
-                        view_number: variable_config_read.view_number,
+                        view_number: pbft_write.view_number,
                         sequence_number: pbft_write.sequence_number,
                         node_id: client.local_node_id,
                         signature: Vec::new()
                     };
+                    
+                    pbft_write.view_change_mutiple_set.entry(new_view.view_number + new_view.node_id).or_default().insert(client.local_node_id);
 
                     sign_new_view(&client.private_key, &mut new_view)?;
 

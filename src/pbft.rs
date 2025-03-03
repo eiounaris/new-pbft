@@ -13,7 +13,7 @@ pub enum Step {
     ReceiveingSyncResponse = 2,
 
     NoPrimary = 9,
-    ViewChanging = 3,
+    ReceivingNewView = 3,
     ReceivingViewChange = 4,
 
     Ok = 5,

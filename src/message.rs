@@ -117,6 +117,7 @@ pub struct ViewChange {
     pub view_number: u64, 
     pub sequence_number: u64,
     pub node_id: u64,
+    pub new_view_number: u64, 
     pub signature: Vec<u8>, // -> all
 }
 
@@ -447,6 +448,8 @@ pub async fn view_change_handler(
 ) -> Result<(), String> {
     println!("接收到 ViewChange 消息");
 
+
+
     Ok(())
 }
 
@@ -459,8 +462,50 @@ pub async fn new_view_handler(
     reset_sender: mpsc::Sender<()>,
     new_view: NewView,
 ) -> Result<(), String> {
+
+    let variable_config_read = variable_config.read().await;
+    let mut pbft_write = pbft.write().await;
+
+    if new_view.view_number != pbft_write.view_number  
+        || new_view.sequence_number < pbft_write.sequence_number
+    {
+        return Ok(())
+    }
+
+    if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
+        pbft_write.step = Step::ReceivingNewView;
+    }
+
+    if pbft_write.step != Step::ReceivingNewView {
+        return Ok(())
+    }
+
     println!("接收到 NewView 消息");
 
+    pbft_write.step = Step::ReceivingViewChange;
+    pbft_write.start_time = get_current_timestamp()?;
+    pbft_write.view_change_mutiple_set.clear();
+    pbft_write.new_view_number += new_view.node_id;
+
+    println!("从节点发送 ViewChange 消息");
+
+    let mut view_change = ViewChange {
+        view_number: pbft_write.view_number,
+        sequence_number: pbft_write.sequence_number,
+        node_id: client.local_node_id,
+        new_view_number: new_view.node_id,
+        signature: Vec::new()
+    };
+
+    sign_view_change(&client.private_key, &mut view_change)?;
+
+    send_udp_data(
+        &client.local_udp_socket,
+        &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
+        MessageType::NewView,
+        &bincode::serialize(&view_change).map_err(|e| e.to_string())?,
+    ).await;
+    
     Ok(())
 }
 
