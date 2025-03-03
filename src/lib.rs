@@ -484,27 +484,29 @@ pub async fn handle_message(
         match message_type {
 
             MessageType::Request => {
-                tokio::spawn({
-                    let request = 
-                        bincode::deserialize::<Request>("content".as_bytes()).map_err(|e| e.to_string())?;
-                    let constant_config = constant_config.clone();
-                    let variable_config = variable_config.clone();
-                    let client = client.clone();
-                    let state = state.clone();
-                    let pbft = pbft.clone();
-                    let reset_sender = reset_sender.clone();
-                    async move {
-                        if let Err(e) = message::request_handler(
-                            constant_config, 
-                            variable_config, 
-                            client, state, pbft, 
-                            reset_sender, 
-                            request
-                        ).await {
-                            eprintln!("{e:?}");
+                if let Ok(request) = 
+                    bincode::deserialize::<Request>(content).map_err(|e| e.to_string()) 
+                {
+                    tokio::spawn({
+                        let constant_config = constant_config.clone();
+                        let variable_config = variable_config.clone();
+                        let client = client.clone();
+                        let state = state.clone();
+                        let pbft = pbft.clone();
+                        let reset_sender = reset_sender.clone();
+                        async move {
+                            if let Err(e) = message::request_handler(
+                                constant_config, 
+                                variable_config, 
+                                client, state, pbft, 
+                                reset_sender, 
+                                request
+                            ).await {
+                                eprintln!("{e:?}");
+                            }
                         }
-                    }
-                });
+                    });
+                }
             },
 
             MessageType::PrePrepare => {
