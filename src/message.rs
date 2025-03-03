@@ -278,7 +278,7 @@ pub async fn preprepare_handler(
         && verify_preprepare(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut preprepare)?
     {
         println!("接收 PrePrepare 消息");
-        // reset_sender.send(()).await.unwrap(); // 重置视图切换计时器，测试注释掉
+        reset_sender.send(()).await.unwrap(); // 重置视图切换计时器，测试注释掉
 
         
         let content: Vec<u8> = {
