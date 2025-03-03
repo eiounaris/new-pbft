@@ -621,18 +621,18 @@ pub async fn state_response_handler(
     let variable_config_read = variable_config.read().await;
     let mut pbft_write = pbft.write().await;
 
-    if state_response.sequence_number > pbft_write.sequence_number
-        && verify_state_response(
-        &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, 
-        &mut state_response)?
+    if pbft_write.step == Step::ReceivingStateResponse
+    && state_response.sequence_number > pbft_write.sequence_number
+    && verify_state_response(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut state_response)?
     {
-        
         let sysnc_request = SyncRequest {
             from_index: pbft_write.sequence_number + 1,
-            to_index: state_response.sequence_number,
+            to_index: min(state_response.sequence_number, pbft_write.sequence_number + 51),
         };
 
-        println!("发送 SyncRequest 消息,{:?}", sysnc_request);
+        println!("发送 {:?} 消息", sysnc_request);
+
+        pbft_write.step = Step::ReceiveingSyncResponse;
 
         send_udp_data(
             &client.local_udp_socket,
@@ -641,7 +641,7 @@ pub async fn state_response_handler(
             &bincode::serialize(&sysnc_request).map_err(|e| e.to_string())?,
         ).await;
     } else {
-        println!("当前区块同主节点一致");
+        println!("当前状态同主节点一致");
 
         pbft_write.step = Step::Ok;
     }
@@ -662,7 +662,7 @@ pub async fn sync_request_handler(
 
     sync_request.to_index = min(sync_request.to_index, sync_request.from_index + 50); 
 
-    println!("接收到 SyncRequest 消息, {:?}", sync_request);
+    println!("接收到 {:?} 消息", sync_request);
 
     let mut blocks: Vec<Block> = Vec::new();
 
@@ -699,12 +699,10 @@ pub async fn sync_response_handler(
 
     let variable_config_read = variable_config.read().await;
     let state_read = state.read().await;
+    let mut pbft_write = pbft.write().await;
     
-    
-
-    if verify_sync_response(
-        &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, 
-        &mut sync_response)?
+    if pbft_write.step == Step::ReceiveingSyncResponse
+    && verify_sync_response(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut sync_response)?
     {
         println!("接收 SyncResponse 消息");
 
@@ -713,11 +711,12 @@ pub async fn sync_response_handler(
         for block in sync_response.blocks.iter() {
             state_read.rocksdb.put_block(block)?;
         }
-        let mut pbft_write = pbft.write().await;
 
         pbft_write.sequence_number = state_read.rocksdb.get_last_block()?.unwrap().index;
 
-        println!("再次发送 StateRequest 消息，检查是否完成");
+        println!("发送 StateRequest 消息");
+
+        pbft_write.step = Step::ReceivingStateResponse;
 
         let target_udp_socket = format!("{}:{}",
             &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].ip, 

@@ -149,12 +149,14 @@ pub async fn view_request (
 
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后如未能得到视图编号，则切换状态 Ok 或 ViewChange
 
-
     let mut pbft_write = pbft.write().await;
 
-    println!("起始状态为{:?}", pbft_write.step);
+    println!("一秒区块同步后，状态为{:?}", pbft_write.step);
 
-    if pbft_write.step == Step::ReceivingViewResponse {
+    if pbft_write.step == Step::ReceivingViewResponse 
+    && pbft_write.step == Step::ReceivingStateResponse
+    && pbft_write.step == Step::ReceiveingSyncResponse
+    {
 
         pbft_write.view_change_mutiple_set.clear();
         pbft_write.step = Step::Ok

@@ -8,13 +8,13 @@ use std::collections::{HashMap, HashSet};
 pub enum Step {
     ReceivingViewResponse = 0,
     ReceivingStateResponse = 1,
+    ReceiveingSyncResponse = 2,
+    ViewChanging = 3,
+    ReceiveingViewChang = 4,
 
-    ViewChanging = 2,
-    ReceiveingViewChang = 3,
-
-    Ok = 4,
-    ReceivingPrepare = 5,
-    ReceiveingCommit = 6,
+    Ok = 5,
+    ReceivingPrepare = 6,
+    ReceiveingCommit = 7,
 }
 
 /// 存储 pbft 共识过程状态信息（待调整）
