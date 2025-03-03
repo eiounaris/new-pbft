@@ -367,15 +367,14 @@ pub async fn commit_handler(
 ) -> Result<(), String> {
     println!("接收 Commit 消息");
 
-    if verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? {
-        
-        let variable_config_read = variable_config.read().await;
-        let mut state_write = state.write().await;
-        let mut pbft_write = pbft.write().await;
-        
-        if pbft_write.step != Step::ReceiveingCommit || pbft_write.commits.contains(&commit.node_id) {
-            return Ok(())
-        }
+    let variable_config_read = variable_config.read().await;
+    let mut state_write = state.write().await;
+    let mut pbft_write = pbft.write().await;
+
+    if pbft_write.step == Step::ReceiveingCommit
+        && !pbft_write.commits.contains(&commit.node_id)
+        && verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? 
+    {
         pbft_write.commits.insert(commit.node_id);
 
         if pbft_write.commits.len() < 2 * ((client.identities.len() - 1) / 3) + 1 {
@@ -507,43 +506,50 @@ pub async fn view_response_handler(
     src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
 
-    println!("接收到 ViewResponse 消息");
-
     let mut variable_config_write = variable_config.write().await;
     let mut pbft_write = pbft.write().await;
     
+    if pbft_write.step != Step::ReceivingViewResponse {
+        return Ok(())
+    }
+
     let hashset = pbft_write.view_change_mutiple_set
         .entry(view_response.view_number)
         .or_insert(HashSet::new());
 
     if !hashset.contains(&view_response.node_id) 
-        && verify_view_response(&client.identities[view_response.node_id as usize].public_key, &mut view_response)? 
+    && verify_view_response(&client.identities[view_response.node_id as usize].public_key, &mut view_response)? 
     {
+        println!("接收到 ViewResponse 消息");
+
         hashset.insert(view_response.node_id);
 
         if hashset.len() < 2 * ((client.identities.len() - 1) / 3) + 1 {
             return Ok(())
         }
 
-        if view_response.view_number == variable_config_write.view_number && client.is_primarry(variable_config_write.view_number) {
+        if client.is_primarry(view_response.view_number) {
             pbft_write.step = Step::Ok;
             return Ok(())
         }
 
-        pbft_write.step = Step::ReceivingStateResponse;
-
-        println!("切换视图为：{}", view_response.view_number);
+        if view_response.view_number != variable_config_write.view_number {
+            println!("切换视图为：{}", view_response.view_number);
         
-        variable_config_write.view_number = view_response.view_number;
+            variable_config_write.view_number = view_response.view_number;
+            pbft_write.view_number = view_response.view_number;
 
-        let variable_config_file = VariableConfig{
-            view_number: variable_config_write.view_number,
-        };
-        let variable_config_json = serde_json::to_string_pretty(&variable_config_file)
-            .map_err(|e| e.to_string())?;
-        fs::write(&constant_config.variable_config_path, &variable_config_json).await
-            .map_err(|e| e.to_string())?;
+            let variable_config_file = VariableConfig{
+                view_number: variable_config_write.view_number,
+            };
 
+            let variable_config_json = serde_json::to_string_pretty(&variable_config_file)
+                .map_err(|e| e.to_string())?;
+            fs::write(&constant_config.variable_config_path, &variable_config_json).await
+                .map_err(|e| e.to_string())?;
+        }
+
+        pbft_write.step = Step::ReceivingStateResponse;
 
         println!("发送 StateRequest 消息");
 
@@ -635,8 +641,6 @@ pub async fn state_response_handler(
         pbft.write().await.step = Step::Ok;
     }
 
-    
-
     Ok(())
 }
 
@@ -700,7 +704,6 @@ pub async fn sync_response_handler(
     {
         println!("正在同步区块");
 
-        
         for block in sync_response.blocks.iter() {
             state_read.rocksdb.put_block(block)?;
         }
