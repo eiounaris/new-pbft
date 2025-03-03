@@ -257,10 +257,11 @@ pub async fn view_change(
 
                     let mut pbft_write = pbft.write().await;
 
-                    if pbft_write.step == Step::ReceivingViewResponse
+                    if pbft_write.step == Step::Initing
+                        || pbft_write.step == Step::ReceivingViewResponse
                         || pbft_write.step == Step::ReceivingStateResponse
                         || pbft_write.step == Step::ReceiveingSyncResponse
-                        || pbft_write.step == Step::ReceiveingViewChange
+                        || pbft_write.step == Step::ReceivingViewChange
                     {
                        continue
                     }
@@ -271,6 +272,8 @@ pub async fn view_change(
                     sleep(Duration::from_millis(num)).await;
 
                     println!("从节点发送 NewView 消息");
+
+                    pbft_write.step = Step::ReceivingViewChange;
 
                     let mut new_view = NewView {
                         view_number: variable_config_read.view_number,

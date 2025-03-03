@@ -7,11 +7,14 @@ use std::collections::{HashMap, HashSet};
 #[derive(PartialEq, Debug)]
 pub enum Step {
     Initing = 8,
+    
     ReceivingViewResponse = 0,
     ReceivingStateResponse = 1,
     ReceiveingSyncResponse = 2,
+
+    NoPrimary = 9,
     ViewChanging = 3,
-    ReceiveingViewChange = 4,
+    ReceivingViewChange = 4,
 
     Ok = 5,
     ReceivingPrepare = 6,
@@ -29,6 +32,7 @@ pub struct Pbft {
     pub prepares: HashSet<u64>,
     pub commits: HashSet<u64>,
     pub view_change_mutiple_set: HashMap<u64, HashSet<u64>>,
+    pub new_view_number: u64,
 }
 impl Pbft {
     /// 初始化pbft共识状态
@@ -46,6 +50,7 @@ impl Pbft {
             prepares: HashSet::new(),
             commits: HashSet::new(),
             view_change_mutiple_set: HashMap::new(),
+            new_view_number: view_number,
         }
     }
 }

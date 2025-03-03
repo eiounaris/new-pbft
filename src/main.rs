@@ -74,24 +74,24 @@ async fn main() -> Result<(), String> {
             });
 
             // 从节点视图切换
-            // let view_change_task = tokio::spawn({
-            //     let constant_config = constant_config.clone();
-            //     let variable_config = variable_config.clone();
-            //     let client = client.clone();
-            //     let pbft = pbft.clone();
-            //     async move {
-            //         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
-            //         if let Err(e) = new_pbft::view_change(
-            //             constant_config, 
-            //             variable_config, 
-            //             client, 
-            //             pbft, 
-            //             reset_receiver
-            //         ).await {
-            //             eprintln!("从节点视图切换出错：{e:?}");
-            //         }
-            //     }
-            // });
+            let view_change_task = tokio::spawn({
+                let constant_config = constant_config.clone();
+                let variable_config = variable_config.clone();
+                let client = client.clone();
+                let pbft = pbft.clone();
+                async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
+                    if let Err(e) = new_pbft::view_change(
+                        constant_config, 
+                        variable_config, 
+                        client, 
+                        pbft, 
+                        reset_receiver
+                    ).await {
+                        eprintln!("从节点视图切换出错：{e:?}");
+                    }
+                }
+            });
 
             // tokio::spawn({
             //     let constant_config = constant_config.clone();
