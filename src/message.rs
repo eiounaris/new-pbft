@@ -254,28 +254,31 @@ pub async fn preprepare_handler(
 ) -> Result<(), String> {
     
     let variable_config_read = variable_config.read().await;
+
+    if client.is_primarry(variable_config_read.view_number) {
+        return Ok(())
+    }
+
     let state_read = state.read().await;
     let mut pbft_write = pbft.write().await;
 
-    if !client.is_primarry(variable_config_read.view_number)
+    if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
+        && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
+    {
+        pbft_write.step = Step::Ok;
+    }
+
+    if pbft_write.step == Step::Ok
         && preprepare.view_number == variable_config_read.view_number
         && preprepare.sequence_number == pbft_write.sequence_number + 1
         && preprepare.block.previous_hash == state_read.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.hash
-        && verify_preprepare(&client.identities[preprepare.node_id as usize].public_key, &mut preprepare)?
+        && verify_preprepare(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut preprepare)?
     {
         println!("接收 PrePrepare 消息");
         // reset_sender.send(()).await.unwrap(); // 重置视图切换计时器，测试注释掉
 
-        if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
-            && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) 
-        {
-            pbft_write.step = Step::Ok;
-        }
-
-        if pbft_write.step != Step::Ok {
-            return Ok(());
-        }
-        let content = {
+        
+        let content: Vec<u8> = {
             pbft_write.step = Step::ReceivingPrepare;
             pbft_write.start_time = get_current_timestamp().unwrap();
             pbft_write.preprepare = Some(preprepare.clone());
@@ -365,7 +368,6 @@ pub async fn commit_handler(
     reset_sender: mpsc::Sender<()>,
     mut commit: Commit,
 ) -> Result<(), String> {
-    println!("接收 Commit 消息");
 
     let variable_config_read = variable_config.read().await;
     let mut state_write = state.write().await;
@@ -375,6 +377,7 @@ pub async fn commit_handler(
         && !pbft_write.commits.contains(&commit.node_id)
         && verify_commit(&client.identities[commit.node_id as usize].public_key, &mut commit)? 
     {
+        println!("接收 Commit 消息");
         pbft_write.commits.insert(commit.node_id);
 
         if pbft_write.commits.len() < 2 * ((client.identities.len() - 1) / 3) + 1 {
@@ -655,10 +658,10 @@ pub async fn sync_request_handler(
     src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
 
-    
     sync_request.to_index = min(sync_request.to_index, sync_request.from_index + 50); 
 
     println!("接收到 SyncRequest 消息, {:?}", sync_request);
+
     let mut blocks: Vec<Block> = Vec::new();
 
     for i in sync_request.from_index..=sync_request.to_index {
@@ -692,25 +695,25 @@ pub async fn sync_response_handler(
     mut sync_response: SyncResponse,
 ) -> Result<(), String> {
 
-    println!("接收 SyncResponse 消息");
-
     let variable_config_read = variable_config.read().await;
     let state_read = state.read().await;
+    
     
 
     if verify_sync_response(
         &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, 
         &mut sync_response)?
     {
+        println!("接收 SyncResponse 消息");
+
         println!("正在同步区块");
 
-        let mut pbft_write = pbft.write().await;
-
         for block in sync_response.blocks.iter() {
-            if state_read.rocksdb.put_block(block)? {
-                pbft_write.sequence_number += 1;
-            }   
+            state_read.rocksdb.put_block(block)?;
         }
+        let mut pbft_write = pbft.write().await;
+        
+        pbft_write.sequence_number = state_read.rocksdb.get_last_block()?.unwrap().index;
 
         println!("再次发送 StateRequest 消息，检查是否完成");
 

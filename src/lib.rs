@@ -152,7 +152,7 @@ pub async fn view_request (
 
     let mut pbft_write = pbft.write().await;
 
-    println!("{:?}", pbft_write.step);
+    println!("起始状态为{:?}", pbft_write.step);
 
     if pbft_write.step == Step::ReceivingViewResponse {
 
