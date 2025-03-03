@@ -619,16 +619,16 @@ pub async fn state_response_handler(
     println!("接收到 StateResponse 消息");
     
     let variable_config_read = variable_config.read().await;
-    let pbft_read = pbft.read().await;
+    let mut pbft_write = pbft.write().await;
 
-    if state_response.sequence_number > pbft_read.sequence_number
+    if state_response.sequence_number > pbft_write.sequence_number
         && verify_state_response(
         &client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, 
         &mut state_response)?
     {
         
         let sysnc_request = SyncRequest {
-            from_index: pbft_read.sequence_number + 1,
+            from_index: pbft_write.sequence_number + 1,
             to_index: state_response.sequence_number,
         };
 
@@ -641,7 +641,9 @@ pub async fn state_response_handler(
             &bincode::serialize(&sysnc_request).map_err(|e| e.to_string())?,
         ).await;
     } else {
-        pbft.write().await.step = Step::Ok;
+        println!("当前区块同主节点一致");
+
+        pbft_write.step = Step::Ok;
     }
 
     Ok(())
@@ -712,7 +714,7 @@ pub async fn sync_response_handler(
             state_read.rocksdb.put_block(block)?;
         }
         let mut pbft_write = pbft.write().await;
-        
+
         pbft_write.sequence_number = state_read.rocksdb.get_last_block()?.unwrap().index;
 
         println!("再次发送 StateRequest 消息，检查是否完成");
