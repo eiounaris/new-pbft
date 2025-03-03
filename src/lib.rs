@@ -154,8 +154,8 @@ pub async fn view_request (
     println!("一秒区块同步后，状态为{:?}", pbft_write.step);
 
     if pbft_write.step == Step::ReceivingViewResponse 
-    && pbft_write.step == Step::ReceivingStateResponse
-    && pbft_write.step == Step::ReceiveingSyncResponse
+    || pbft_write.step == Step::ReceivingStateResponse
+    || pbft_write.step == Step::ReceiveingSyncResponse
     {
 
         pbft_write.view_change_mutiple_set.clear();
