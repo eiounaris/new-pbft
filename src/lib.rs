@@ -486,7 +486,7 @@ pub async fn handle_message(
             MessageType::Request => {
                 tokio::spawn({
                     let request = 
-                        bincode::deserialize::<Request>(content).map_err(|e| e.to_string())?;
+                        bincode::deserialize::<Request>("content".as_bytes()).map_err(|e| e.to_string())?;
                     let constant_config = constant_config.clone();
                     let variable_config = variable_config.clone();
                     let client = client.clone();
