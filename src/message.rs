@@ -570,6 +570,12 @@ pub async fn new_view_handler(
         signature: Vec::new()
     };
 
+    let hashset = pbft_write.view_change_mutiple_set
+        .entry(view_change.new_view_number)
+        .or_default();
+
+    hashset.insert(client.local_node_id);
+
     sign_view_change(&client.private_key, &mut view_change)?;
 
     send_udp_data(
