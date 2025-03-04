@@ -7,7 +7,7 @@ use bincode;
 use std::convert::TryInto;
 
 /// 事务（fine）
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub enum Transaction {
     Tx0 = 0,
     Tx1 = 1,
@@ -15,7 +15,7 @@ pub enum Transaction {
 }
 
 /// 区块（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Block {
     pub index: u64,
     pub timestamp: u64,

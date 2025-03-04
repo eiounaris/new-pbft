@@ -3,7 +3,7 @@
 pub mod store;
 pub mod network;
 pub mod message;
-pub mod restapi;
+// pub mod restapi;
 pub mod key;
 pub mod client;
 pub mod pbft;

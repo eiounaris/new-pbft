@@ -23,7 +23,6 @@ use std::cmp::min;
 
 
 /// 消息类型（待调整）
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MessageType {
     Request = 0,
     PrePrepare = 1,
@@ -48,7 +47,7 @@ pub enum MessageType {
 }
 
 /// 请求消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Request {
     pub transaction: Transaction,
     pub timestamp: u64,
@@ -62,7 +61,7 @@ impl Request {
 }
 
 /// 预准备消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PrePrepare {
     pub view_number: u64,
     pub sequence_number: u64,
@@ -74,7 +73,7 @@ pub struct PrePrepare {
 }
 
 /// 准备消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Prepare {
     pub view_number: u64,
     pub sequence_number: u64,
@@ -84,7 +83,7 @@ pub struct Prepare {
 }
 
 /// 提交消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Commit {
     pub view_number: u64,
     pub sequence_number: u64,
@@ -94,7 +93,7 @@ pub struct Commit {
 }
 
 /// 回应消息（PBFT 论文中涉及，目前暂时保留，该场景使用不到）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Reply {
     pub view_number: u64,
     pub timestamp: u64,
@@ -105,7 +104,7 @@ pub struct Reply {
 }
 
 /// 心跳消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Hearbeat {
     pub view_number: u64,
     pub sequence_number: u64,
@@ -114,7 +113,7 @@ pub struct Hearbeat {
 }
 
 /// 视图切换消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ViewChange {
     pub view_number: u64, 
     pub sequence_number: u64,
@@ -124,7 +123,7 @@ pub struct ViewChange {
 }
 
 /// 新试图消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct NewView {
     pub view_number: u64,
     pub sequence_number: u64,
@@ -133,12 +132,12 @@ pub struct NewView {
 }
 
 /// 试图请求消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ViewRequest {
 }
 
 /// 试图请求响应消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ViewResponse {
     pub view_number: u64,
     pub node_id: u64,
@@ -146,12 +145,12 @@ pub struct ViewResponse {
 }
 
 ///
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct StateRequest {
 }
 
 ///
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct StateResponse {
     pub sequence_number: u64,
     // pub proof: Vec<Commit>,
@@ -160,14 +159,14 @@ pub struct StateResponse {
 
 
 /// 同步请求消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SyncRequest {
     pub from_index: u64,
     pub to_index: u64,
 }
 
 /// 同步响应消息（fine）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SyncResponse {
     pub blocks: Vec<Block>,
     pub signature: Vec<u8>, // -> all
@@ -768,7 +767,7 @@ pub async fn state_response_handler(
             to_index: min(state_response.sequence_number, pbft_write.sequence_number + 51),
         };
 
-        println!("发送 {:?} 消息", sysnc_request);
+        println!("发送 SyncRequest 消息");
 
         pbft_write.step = Step::ReceivingSyncResponse;
 
@@ -800,7 +799,7 @@ pub async fn sync_request_handler(
 
     sync_request.to_index = min(sync_request.to_index, sync_request.from_index + 50); 
 
-    println!("接收到 {:?} 消息", sync_request);
+    println!("接收到 SyncRequest 消息");
 
     let mut blocks: Vec<Block> = Vec::new();
 
