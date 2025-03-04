@@ -245,7 +245,7 @@ pub async fn request_handler(
         let multicast_addr = constant_config.multi_cast_addr
             .parse::<SocketAddr>()
             .map_err(|e| e.to_string())?;
-        send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await;
+        send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::PrePrepare, &content).await?;
     }
 
     Ok(())
@@ -313,7 +313,7 @@ pub async fn preprepare_handler(
         let multicast_addr = constant_config.multi_cast_addr
             .parse::<SocketAddr>()
             .map_err(|e| e.to_string())?;
-        send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Prepare, &content).await;
+        send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Prepare, &content).await?;
     }
 
     Ok(())
@@ -363,7 +363,7 @@ pub async fn prepare_handler(
         let multicast_addr = constant_config.multi_cast_addr
             .parse::<SocketAddr>()
             .map_err(|e| e.to_string())?;
-        send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Commit, &content).await;
+        send_udp_data(&client.local_udp_socket, &multicast_addr, MessageType::Commit, &content).await?;
     }
 
     Ok(())
@@ -519,7 +519,7 @@ pub async fn view_change_handler(
             &target_udp_socket,
              MessageType::StateRequest, 
              &Vec::new()
-        ).await;
+        ).await?;
 
         sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态为 Ok 或 ViewChange
 
@@ -598,7 +598,7 @@ pub async fn new_view_handler(
         &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
         MessageType::ViewChange,
         &bincode::serialize(&view_change).map_err(|e| e.to_string())?,
-    ).await;
+    ).await?;
     
     Ok(())
 }
@@ -631,7 +631,7 @@ pub async fn view_request_handler(
         &src_socket_addr,
         MessageType::ViewResponse,
         &bincode::serialize(&view_response).map_err(|e| e.to_string())?,
-    ).await;
+    ).await?;
 
     Ok(())
 }
@@ -705,7 +705,7 @@ pub async fn view_response_handler(
             &target_udp_socket,
              MessageType::StateRequest, 
              &Vec::new()
-        ).await;
+        ).await?;
     }
 
     Ok(())
@@ -738,7 +738,7 @@ pub async fn state_request_handler(
         &src_socket_addr,
         MessageType::StateResponse,
         &bincode::serialize(&state_response).map_err(|e| e.to_string())?,
-    ).await;
+    ).await?;
     
     Ok(())
 }
@@ -777,7 +777,7 @@ pub async fn state_response_handler(
             &src_socket_addr,
             MessageType::SyncRequest,
             &bincode::serialize(&sysnc_request).map_err(|e| e.to_string())?,
-        ).await;
+        ).await?;
     } else {
         println!("当前状态同主节点一致");
 
@@ -820,7 +820,7 @@ pub async fn sync_request_handler(
         &src_socket_addr,
         MessageType::SyncResponse,
         &bincode::serialize(&sync_response).map_err(|e| e.to_string())?,
-    ).await;
+    ).await?;
 
     Ok(())
 }
@@ -867,7 +867,7 @@ pub async fn sync_response_handler(
             &target_udp_socket,
              MessageType::StateRequest, 
              &Vec::new()
-        ).await;
+        ).await?;
     }
 
     Ok(())

@@ -130,9 +130,9 @@ async fn main() -> Result<(), String> {
             // }); 
 
             // 等待所有任务执行完毕
-            // tokio::try_join!(recv_task, heartbeat_task, view_change_task, send_task).unwrap();
+            tokio::try_join!(recv_task, heartbeat_task, view_change_task, send_task).unwrap();
 
-            tokio::try_join!(recv_task, send_task).unwrap();
+            // tokio::try_join!(recv_task, send_task).unwrap();
         },
         
         Err(e) => eprintln!("{e:?}"),

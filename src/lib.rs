@@ -1,4 +1,4 @@
-// #![allow(dead_code, unused_variables)]
+#![allow(dead_code, unused_variables)]
 
 pub mod store;
 pub mod network;
@@ -146,7 +146,7 @@ pub async fn view_request (
         &multicast_addr, 
         MessageType::ViewRequest, 
         &Vec::new()
-    ).await;
+    ).await?;
 
     sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后检查状态
 
@@ -209,7 +209,7 @@ pub async fn heartbeat(
                        &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
                         MessageType::Hearbeat,
                         &bincode::serialize(&heartbeat).map_err(|e| e.to_string())?,
-                    ).await;
+                    ).await?;
                 }
             }
         }
@@ -303,7 +303,7 @@ pub async fn view_change(
                        &constant_config.multi_cast_addr.parse().map_err(|e: std::net::AddrParseError| e.to_string())?,
                         MessageType::NewView,
                         &bincode::serialize(&new_view).map_err(|e| e.to_string())?,
-                    ).await;
+                    ).await?;
                 }
             }
             _ = reset_receiver.recv() => {
@@ -397,7 +397,7 @@ pub async fn send_message(
                                 &multicast_addr,
                                 MessageType::Request,
                                 &content,
-                            ).await;
+                            ).await.unwrap();
 
                             sleep(interval).await;
                         }
@@ -429,7 +429,7 @@ pub async fn send_message(
                 &multicast_addr,
                 MessageType::Request,
                 &content,
-            ).await;
+            ).await?;
         }
     }
 

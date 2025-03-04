@@ -80,7 +80,7 @@ async fn send_request(
         &multicast_addr,
         MessageType::Request,
         &content,
-    ).await;
+    ).await.unwrap();
     HttpResponse::Created().json(true)
 }
 
