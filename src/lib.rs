@@ -156,7 +156,7 @@ pub async fn view_request (
         || pbft_write.step == Step::ReceivingStateResponse
         || pbft_write.step == Step::ReceivingSyncResponse
     {
-        println!("当前状态为：{:?}，区块链同步可能存在异常", pbft_write.step);
+        println!("初始状态为：{:?}，区块链同步可能存在异常", pbft_write.step);
 
         pbft_write.step = Step::Ok
     }
@@ -257,25 +257,20 @@ pub async fn view_change(
                     }
                     
                     if pbft_write.step != Step::NoPrimary && pbft_write.step != Step::ReceivingViewChange {
+                        eprintln!("检测到主节点掉线");
                         pbft_write.step = Step::NoPrimary;
-                        continue
-                    }
-
-                    if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
-                        pbft_write.step = Step::NoPrimary;
-                        eprintln!("检测到主节点掉线")
-                    }
-
-                    if pbft_write.step != Step::NoPrimary {
-                        continue
                     }
 
                     drop(pbft_write);
 
-                    let num: u64 = rand::random::<u64>() % 1000; // 生成 0 到 1000 之间的随机整数
+                    let num: u64 = rand::random::<u64>() % 500; // 生成 0 到 500 之间的随机整数
                     sleep(Duration::from_millis(num)).await;
 
                     let mut pbft_write = pbft.write().await;
+
+                    if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
+                        pbft_write.step = Step::NoPrimary;
+                    }
 
                     if pbft_write.step != Step::NoPrimary {
                         continue
@@ -348,14 +343,14 @@ pub async fn send_message(
 
         if parts.len() == 1 && parts[0] == "last" {
             let block = state.read().await.rocksdb.get_last_block()?;
-            println!("索引：{:?}, 前哈希：{:?}，哈希 ：{:?}", block.index, block.previous_hash, block.hash);
+            println!("索引：{:?}, 时间戳 ：{:?}", block.index, block.timestamp);
             continue;
         }
 
         if parts.len() == 2 && parts[0] == "index" {
             let Ok(index) = parts[1].parse::<u64>() else { continue };
             let Some(block) = state.read().await.rocksdb.get_block_by_index(index)? else {continue};
-            println!("索引：{:?}, 前哈希：{:?}，哈希 ：{:?}", block.index, block.previous_hash, block.hash);
+            println!("索引：{:?}, 时间戳 ：{:?}", block.index, block.timestamp);
             continue;
         }
 
