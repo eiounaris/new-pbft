@@ -6,6 +6,8 @@ use bincode;
 
 use std::convert::TryInto;
 
+// ---
+
 /// 事务（fine）
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub enum Transaction {
@@ -13,6 +15,8 @@ pub enum Transaction {
     Tx1 = 1,
     Tx2 = 2,
 }
+
+// ---
 
 /// 区块（fine）
 #[derive(Clone, Serialize, Deserialize)]
@@ -24,6 +28,7 @@ pub struct Block {
     pub hash: Vec<u8>,
 }
 
+// ---
 
 /// `BlockStore` trait 定义数据库操作接口
 pub trait BlockStore {
@@ -34,13 +39,17 @@ pub trait BlockStore {
     fn create_block(&self, operations: &Vec<Transaction>) -> Result<Block, String>;
 }
 
+// ---
 
 /// 使用 RocksDB 实现 `BlockStore` trait
 pub struct RocksDBBlockStore {
     db: DB,
 }
 
+// ---
+
 impl RocksDBBlockStore {
+
     pub fn new(path: &str) -> Result<Self, String> {
         let db = DB::open_default(path)?;
         
@@ -54,8 +63,10 @@ impl RocksDBBlockStore {
                 hash: Vec::new(),
             };
             let mut batch = rocksdb::WriteBatch::default();
-            batch.put(genesis_block.index.to_le_bytes(), bincode::serialize(&genesis_block)
-                .map_err(|e| e.to_string())?);
+            batch.put(
+                genesis_block.index.to_le_bytes(), 
+                bincode::serialize(&genesis_block).map_err(|e| e.to_string())?
+            );
             batch.put(last_block_index_key, genesis_block.index.to_le_bytes());
             db.write(batch)?;
         }
@@ -63,7 +74,10 @@ impl RocksDBBlockStore {
     }
 }
 
+// ---
+
 impl BlockStore for RocksDBBlockStore {
+
     fn put_block(&self, block: &Block) -> Result<bool, String> {
         let last_block = self.get_last_block()?;
         if last_block.index + 1 == block.index && last_block.hash == block.previous_hash {
@@ -72,36 +86,36 @@ impl BlockStore for RocksDBBlockStore {
                 .map_err(|e| e.to_string())?);
             batch.put(b"last_block_index", block.index.to_le_bytes());
             self.db.write(batch)?;
-            
-            Ok(true)
-        } else {
-            Ok(false)
+            return Ok(true)
         }
+        Ok(false)
     }
+
+    // ---
 
     fn get_block_by_index(&self, index: u64) -> Result<Option<Block>, String> {
         let index = index.to_le_bytes();
         if let Some(value) = self.db.get(index)? {
-            let block: Block = bincode::deserialize(&value)
+            let block = bincode::deserialize::<Block>(&value)
                 .map_err(|e| e.to_string())?;
-            Ok(Some(block))
-        } else {
-            Ok(None)
+            return Ok(Some(block))
         }
+        Ok(None)
     }
 
     fn get_last_block(&self) -> Result<Block, String> {
         let last_block_index_key = b"last_block_index";
-        if let Some(last_index_bytes) = self.db.get(last_block_index_key)? {
-            let last_index: u64 = u64::from_le_bytes(last_index_bytes.try_into().unwrap()); // ?
-            match self.get_block_by_index(last_index) {
-                Ok(Some(last_block)) => Ok(last_block),
-                _ => Err("缺失创世区块".to_string()),
+        if let Some(last_block_index_bytes) = self.db.get(last_block_index_key)? {
+            let last_block_index = u64::from_le_bytes(last_block_index_bytes.try_into().unwrap()); // ?
+            match self.get_block_by_index(last_block_index) {
+                Ok(Some(last_block)) => return Ok(last_block),
+                _ => return Err("缺失创世区块".to_string()),
             }
-        } else {
-            Err("缺失创世区块".to_string())
         }
+        Err("缺失创世区块".to_string())
     }
+
+    // ---
 
     fn get_blocks_in_range(&self, begin_index: u64, end_index: u64) -> Result<Vec<Block>, String> {
         let mut iter = 
@@ -113,8 +127,7 @@ impl BlockStore for RocksDBBlockStore {
                 continue;
             }
             // 安全转换为u64
-            let index_bytes: [u8; 8] = key.as_ref().try_into()
-                .map_err(|e: std::array::TryFromSliceError| e.to_string())?;
+            let index_bytes: [u8; 8] = key.as_ref().try_into().unwrap();
             let index = u64::from_le_bytes(index_bytes);
             if index > end_index {
                 break;
@@ -126,13 +139,15 @@ impl BlockStore for RocksDBBlockStore {
         Ok(blocks)
     }
 
+    // ---
+
     fn create_block(&self, transactions: &Vec<Transaction>) -> Result<Block, String> {
         let last_block = self.get_last_block()?;
 
         let index = last_block.index + 1;
-        let timestamp = get_current_timestamp().unwrap();
+        let timestamp = get_current_timestamp()?;
         let previous_hash = last_block.hash;
-        let hash = calculate_block_hash(index, timestamp, transactions, &previous_hash).unwrap();
+        let hash = calculate_block_hash(index, timestamp, transactions, &previous_hash)?;
     
         let new_block = Block {
             index,

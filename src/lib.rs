@@ -263,6 +263,7 @@ pub async fn view_change(
 
                     if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
                         pbft_write.step = Step::NoPrimary;
+                        eprintln!("检测到主节点掉线")
                     }
 
                     if pbft_write.step != Step::NoPrimary {
@@ -375,7 +376,7 @@ pub async fn send_message(
             .map_err(|e| e.to_string())?;
         
         if parts.len() == 3 && parts[0] == "test" {
-            
+
             let Ok(count) = parts[1].parse::<u64>() else { continue };
             let Ok(interval_us) = parts[2].parse::<u64>() else { continue };
             let interval = Duration::from_micros(interval_us);
