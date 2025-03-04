@@ -4,6 +4,8 @@ use sha2::{Sha256, Digest};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+// ---
+
 /// 加载时间戳（s）
 pub fn get_current_timestamp() -> Result<u64, String> {
     let start = SystemTime::now();
@@ -12,6 +14,8 @@ pub fn get_current_timestamp() -> Result<u64, String> {
         .map_err(|e| e.to_string())?;
     Ok(since_epoch.as_secs())
 }
+
+// ---
 
 /// 计算区块哈希
 pub fn calculate_block_hash(

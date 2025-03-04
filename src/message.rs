@@ -281,7 +281,7 @@ pub async fn preprepare_handler(
     if pbft_write.step == Step::Ok
         && preprepare.view_number == variable_config_read.view_number
         && preprepare.sequence_number == pbft_write.sequence_number + 1
-        && preprepare.block.previous_hash == state_read.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.hash
+        && preprepare.block.previous_hash == state_read.rocksdb.get_last_block()?.hash
         && verify_preprepare(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut preprepare)?
     {
         println!("接收 PrePrepare 消息");
@@ -850,7 +850,7 @@ pub async fn sync_response_handler(
             state_read.rocksdb.put_block(block)?;
         }
 
-        pbft_write.sequence_number = state_read.rocksdb.get_last_block()?.unwrap().index;
+        pbft_write.sequence_number = state_read.rocksdb.get_last_block()?.index;
 
         println!("发送 StateRequest 消息");
 

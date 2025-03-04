@@ -103,7 +103,7 @@ pub async fn init() -> Result<(
     // 创建 state
     let state = State::new(&constant_config.database_name)?;
     // 创建 pbft
-    let pbft = Pbft::new(variable_config.view_number, state.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块！！！")?.index);
+    let pbft = Pbft::new(variable_config.view_number, state.rocksdb.get_last_block()?.index);
     // 创建 channel
     let (reset_sender, reset_receiver) = tokio::sync::mpsc::channel(1);
 
@@ -346,7 +346,7 @@ pub async fn send_message(
         let parts: Vec<&str> = line.split_whitespace().collect();
 
         if parts.len() == 1 && parts[0] == "last" {
-            let block = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?;
+            let block = state.read().await.rocksdb.get_last_block()?;
             println!("索引：{:?}, 前哈希：{:?}，哈希 ：{:?}", block.index, block.previous_hash, block.hash);
             continue;
         }
@@ -383,7 +383,7 @@ pub async fn send_message(
             let Ok(interval_us) = parts[2].parse::<u64>() else { continue };
             let interval = Duration::from_micros(interval_us);
 
-            let old_index = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.index;
+            let old_index = state.read().await.rocksdb.get_last_block()?.index;
 
             for _ in 0..(count+99)/100 {
                 tokio::spawn({
@@ -409,7 +409,7 @@ pub async fn send_message(
 
             sleep(Duration::from_secs(1)).await;
 
-            let end_block = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?;
+            let end_block = state.read().await.rocksdb.get_last_block()?;
             
             if let Some(begin_block) = state.read().await.rocksdb.get_block_by_index(old_index + 1).unwrap() {
                 println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);

@@ -37,7 +37,7 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
 async fn get_last_block(data: web::Data<AppState>) -> impl Responder {
     // 这里应返回全部区块数据
     let state_read = data.state.read().await;
-    let last_block = state_read.rocksdb.get_last_block().unwrap().unwrap();
+    let last_block = state_read.rocksdb.get_last_block().unwrap();
     HttpResponse::Ok().json(&last_block)
 }
 
