@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables)]
+// #![allow(dead_code, unused_variables)]
 
 pub mod store;
 pub mod network;
@@ -256,16 +256,16 @@ pub async fn view_change(
                         return Ok(())
                     }
                     
-                    if pbft_write.step != Step::ReceivingNewView && pbft_write.step != Step::ReceivingViewChange {
-                        pbft_write.step = Step::ReceivingNewView;
+                    if pbft_write.step != Step::NoPrimary && pbft_write.step != Step::ReceivingViewChange {
+                        pbft_write.step = Step::NoPrimary;
                         continue
                     }
 
                     if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
-                        pbft_write.step = Step::ReceivingNewView;
+                        pbft_write.step = Step::NoPrimary;
                     }
 
-                    if pbft_write.step != Step::ReceivingNewView {
+                    if pbft_write.step != Step::NoPrimary {
                         continue
                     }
 
@@ -276,13 +276,13 @@ pub async fn view_change(
 
                     let mut pbft_write = pbft.write().await;
 
-                    if pbft_write.step != Step::ReceivingNewView {
+                    if pbft_write.step != Step::NoPrimary {
                         continue
                     }
 
                     pbft_write.step = Step::ReceivingViewChange;
                     pbft_write.start_time = get_current_timestamp().unwrap();
-                    pbft_write.view_change_mutiple_set.clear();
+                    pbft_write.view_change_collect_map.clear();
                     pbft_write.new_view_number = pbft_write.view_number + client.local_node_id;
 
                     println!("从节点发送 NewView 消息");
@@ -371,6 +371,7 @@ pub async fn send_message(
         let multicast_addr = constant_config.multi_cast_addr
             .parse::<SocketAddr>()
             .map_err(|e| e.to_string())?;
+        let multicast_addr = Arc::new(multicast_addr);
 
         let content: Vec<u8> = bincode::serialize(&request)
             .map_err(|e| e.to_string())?;
@@ -384,12 +385,13 @@ pub async fn send_message(
 
             let old_index = state.read().await.rocksdb.get_last_block()?.ok_or_else(|| "缺失创世区块")?.index;
 
-            for i in 0..(count+99)/100 {
+            for _ in 0..(count+99)/100 {
                 tokio::spawn({
+                    let multicast_addr = multicast_addr.clone();
                     let client = client.clone();
                     let content = content.clone();
                     async move {
-                        for i in 0..100 {
+                        for _ in 0..100 {
                             send_udp_data(
                                 &client.local_udp_socket,
                                 &multicast_addr,

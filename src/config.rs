@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use rsa::{pkcs1::DecodeRsaPublicKey, RsaPublicKey};
 use tokio::fs;
+
 // ---
 
 /// 身份配置（fine）
@@ -15,9 +16,9 @@ pub struct Identity {
 impl Identity {
     /// 从文件加载节点身份信息
     pub async fn load_identity_config(filepath: String) -> Result<Vec<Identity>, String> {
-        let identitys_config_json = fs::read_to_string(filepath).await
+        let identitys_json = fs::read_to_string(filepath).await
             .map_err(|e| e.to_string())?;
-        let identitys: Vec<Identity> = serde_json::from_str(&identitys_config_json)
+        let identitys: Vec<Identity> = serde_json::from_str(&identitys_json)
             .map_err(|e| e.to_string())?;
         Ok(identitys)
     }

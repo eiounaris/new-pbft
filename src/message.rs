@@ -467,7 +467,7 @@ pub async fn view_change_handler(
         return Ok(())
     }
     
-    let hashset = pbft_write.view_change_mutiple_set
+    let hashset = pbft_write.view_change_collect_map
         .entry(view_change.new_view_number)
         .or_insert(HashSet::new());
 
@@ -561,10 +561,10 @@ pub async fn new_view_handler(
     }
 
     if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
-        pbft_write.step = Step::ReceivingNewView;
+        pbft_write.step = Step::NoPrimary;
     }
 
-    if pbft_write.step != Step::ReceivingNewView {
+    if pbft_write.step != Step::NoPrimary {
         return Ok(())
     }
 
@@ -572,7 +572,7 @@ pub async fn new_view_handler(
 
     pbft_write.step = Step::ReceivingViewChange;
     pbft_write.start_time = get_current_timestamp()?;
-    pbft_write.view_change_mutiple_set.clear();
+    pbft_write.view_change_collect_map.clear();
     pbft_write.new_view_number = new_view.view_number + new_view.node_id;
 
     println!("从节点发送 ViewChange 消息");
@@ -585,7 +585,7 @@ pub async fn new_view_handler(
         signature: Vec::new()
     };
 
-    let hashset = pbft_write.view_change_mutiple_set
+    let hashset = pbft_write.view_change_collect_map
         .entry(view_change.new_view_number)
         .or_default();
 
@@ -654,7 +654,7 @@ pub async fn view_response_handler(
         return Ok(())
     }
 
-    let hashset = pbft_write.view_change_mutiple_set
+    let hashset = pbft_write.view_change_collect_map
         .entry(view_response.view_number)
         .or_insert(HashSet::new());
 
