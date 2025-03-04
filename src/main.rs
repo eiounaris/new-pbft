@@ -48,6 +48,7 @@ async fn main() -> Result<(), String> {
                     if let Err(e) = new_pbft::view_request(
                         constant_config, 
                         client,
+
                         pbft
                     ).await {
                         eprintln!("视图请求出错：{e:?}");
@@ -66,6 +67,7 @@ async fn main() -> Result<(), String> {
                     if let Err(e) = new_pbft::heartbeat(
                         constant_config, 
                         client, 
+
                         variable_config, 
                         pbft
                     ).await {
@@ -106,6 +108,7 @@ async fn main() -> Result<(), String> {
                     if let Err(e) = new_pbft::send_message(
                         constant_config, 
                         client, 
+
                         state
                     ).await {
                         eprintln!("命令行输入出错：{e:?}");
@@ -113,7 +116,8 @@ async fn main() -> Result<(), String> {
                 }
             });
 
-            // tokio::spawn({
+            // Restful API
+            // let web_task = tokio::spawn({
             //     let constant_config = constant_config.clone();
             //     let client = client.clone();
             //     let state = state.clone();
@@ -122,9 +126,10 @@ async fn main() -> Result<(), String> {
             //         if let Err(e) = new_pbft::restapi::actix_web_runweb_run(
             //             constant_config, 
             //             client, 
+            //
             //             state
             //         ).await {
-            //             eprintln!("{e:?}");
+            //             eprintln!("Restful API 出错：{e:?}");
             //         }
             //     }
             // }); 

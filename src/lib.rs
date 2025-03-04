@@ -353,11 +353,10 @@ pub async fn send_message(
 
         if parts.len() == 2 && parts[0] == "index" {
             let Ok(index) = parts[1].parse::<u64>() else { continue };
-            let block = state.read().await.rocksdb.get_block_by_index(index)?.ok_or_else(|| "不存在索引区块")?;
+            let Some(block) = state.read().await.rocksdb.get_block_by_index(index)? else {continue};
             println!("索引：{:?}, 前哈希：{:?}，哈希 ：{:?}", block.index, block.previous_hash, block.hash);
             continue;
         }
-
 
         let mut request = Request {
             transaction: Transaction::Tx0,
@@ -371,19 +370,20 @@ pub async fn send_message(
         let multicast_addr = constant_config.multi_cast_addr
             .parse::<SocketAddr>()
             .map_err(|e| e.to_string())?;
-        let multicast_addr = Arc::new(multicast_addr);
-
+        
         let content: Vec<u8> = bincode::serialize(&request)
             .map_err(|e| e.to_string())?;
-
-        let content = Arc::new(content);
-
+        
         if parts.len() == 3 && parts[0] == "test" {
+            
             let Ok(count) = parts[1].parse::<u64>() else { continue };
             let Ok(interval_us) = parts[2].parse::<u64>() else { continue };
             let interval = Duration::from_micros(interval_us);
 
             let old_index = state.read().await.rocksdb.get_last_block()?.index;
+
+            let multicast_addr = Arc::new(multicast_addr);
+            let content = Arc::new(content);
 
             for _ in 0..(count+99)/100 {
                 tokio::spawn({
@@ -411,14 +411,14 @@ pub async fn send_message(
 
             let end_block = state.read().await.rocksdb.get_last_block()?;
             
-            if let Some(begin_block) = state.read().await.rocksdb.get_block_by_index(old_index + 1).unwrap() {
+            if let Some(begin_block) = state.read().await.rocksdb.get_block_by_index(old_index + 1)? {
                 println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);
                 println!("begin_timestamp: {}, end_timestamp: {}", begin_block.timestamp, end_block.timestamp);
                 println!("blocksize: {}", constant_config.block_size);
                 println!("tps = {}", (
                     end_block.index - begin_block.index) as f64  
                     * end_block.transactions.len() as f64 
-                    / (end_block.timestamp - begin_block.timestamp) as f64
+                    / (end_block.timestamp - begin_block.timestamp + 1) as f64
                 );
             } else {
                 eprintln!("测试未生成新区快");
