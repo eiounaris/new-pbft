@@ -281,7 +281,7 @@ pub async fn view_change(
                     pbft_write.view_change_collect_map.clear();
                     pbft_write.new_view_number = pbft_write.view_number + client.local_node_id;
 
-                    println!("从节点发送 NewView 消息");
+                    println!("发送 NewView 消息");
 
                     let mut new_view = NewView {
                         view_number: pbft_write.view_number,

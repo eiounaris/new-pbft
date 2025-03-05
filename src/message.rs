@@ -196,7 +196,7 @@ pub async fn request_handler(
 
         if state_write.request_buffer.len() < 3 * (constant_config.block_size as usize) {
             state_write.add_request(request);
-            println!("主节点请求缓存区大小：{}", state_write.request_buffer.len());
+            println!("请求缓存区大小：{}", state_write.request_buffer.len());
         } else {
             eprintln!("缓冲已满");
         }
@@ -417,7 +417,7 @@ pub async fn reply_handler(
     reset_sender: mpsc::Sender<()>,
     reply: Reply,
 ) -> Result<(), String> {
-    println!("接收到 Reply 消息");
+    println!("接收 Reply 消息");
 
     Ok(())
 }
@@ -439,7 +439,7 @@ pub async fn hearbeat_handler(
         && pbft_read.step != Step::ReceivingViewChange
         && verify_heartbeat(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut heartbeat)? 
     {
-        // println!("接收到合法 Hearbeat 消息");
+        // println!("接收 Hearbeat 消息");
         reset_sender.send(()).await.map_err(|e| e.to_string())?; // 重置视图切换计时器
     }
     Ok(())
@@ -567,14 +567,14 @@ pub async fn new_view_handler(
         return Ok(())
     }
 
-    println!("接收到 NewView 消息");
+    println!("接收 NewView 消息");
 
     pbft_write.step = Step::ReceivingViewChange;
     pbft_write.start_time = get_current_timestamp()?;
     pbft_write.view_change_collect_map.clear();
     pbft_write.new_view_number = new_view.view_number + new_view.node_id;
 
-    println!("从节点发送 ViewChange 消息");
+    println!("发送 ViewChange 消息");
 
     let mut view_change = ViewChange {
         view_number: pbft_write.view_number,
@@ -660,7 +660,7 @@ pub async fn view_response_handler(
     if !hashset.contains(&view_response.node_id) 
     && verify_view_response(&client.identities[view_response.node_id as usize].public_key, &mut view_response)? 
     {
-        println!("接收到 ViewResponse 消息");
+        println!("接收 ViewResponse 消息");
 
         hashset.insert(view_response.node_id);
 
@@ -753,7 +753,7 @@ pub async fn state_response_handler(
     src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
 
-    println!("接收到 StateResponse 消息");
+    println!("接收 StateResponse 消息");
     
     let variable_config_read = variable_config.read().await;
     let mut pbft_write = pbft.write().await;
@@ -799,7 +799,7 @@ pub async fn sync_request_handler(
 
     sync_request.to_index = min(sync_request.to_index, sync_request.from_index + 50); 
 
-    println!("接收到 SyncRequest 消息");
+    println!("接收 SyncRequest 消息");
 
     let mut blocks: Vec<Block> = Vec::new();
 
