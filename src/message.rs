@@ -573,8 +573,8 @@ pub async fn new_view_handler(
     pbft_write.step = Step::ReceivingViewChange;
     pbft_write.start_time = get_current_timestamp()?;
     pbft_write.view_change_collect_map.clear();
-    pbft_write.new_view_number = new_view.view_number + new_view.node_id;
-
+    pbft_write.new_view_number = (new_view.view_number % client.nodes_number) + client.nodes_number + new_view.node_id;
+    
     println!("发送 ViewChange 消息");
 
     let mut view_change = ViewChange {
