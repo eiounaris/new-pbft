@@ -280,7 +280,7 @@ pub async fn view_change(
                     pbft_write.step = Step::ReceivingViewChange;
                     pbft_write.start_time = get_current_timestamp().unwrap();
                     pbft_write.view_change_collect_map.clear();
-                    pbft_write.new_view_number = (pbft_write.view_number % client.nodes_number) + client.nodes_number + client.local_node_id;
+                    pbft_write.new_view_number = ((pbft_write.view_number / client.nodes_number) + 1) * client.nodes_number + client.local_node_id;
 
                     println!("发送 NewView 消息");
 
