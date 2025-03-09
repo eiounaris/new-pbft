@@ -754,15 +754,26 @@ pub async fn state_response_handler(
     src_socket_addr: SocketAddr,
 ) -> Result<(), String> {
 
-    println!("接收 StateResponse 消息");
-    
     let variable_config_read = variable_config.read().await;
     let mut pbft_write = pbft.write().await;
 
     if pbft_write.step == Step::ReceivingStateResponse
-    && state_response.sequence_number > pbft_write.sequence_number
     && verify_state_response(&client.identities[(variable_config_read.view_number % client.nodes_number) as usize].public_key, &mut state_response)?
     {
+        println!("接收 StateResponse 消息");
+        if state_response.sequence_number == pbft_write.sequence_number  {
+            println!("当前状态同主节点一致");
+    
+            pbft_write.step = Step::Ok;
+            
+            return Ok(())
+        } else if state_response.sequence_number < pbft_write.sequence_number {
+            println!("主节点区块链异常，考虑切换主节点");
+    
+            pbft_write.step = Step::Ok;
+
+            return Ok(())
+        }
         let sysnc_request = SyncRequest {
             from_index: pbft_write.sequence_number + 1,
             to_index: min(state_response.sequence_number, pbft_write.sequence_number + 51),
@@ -778,10 +789,6 @@ pub async fn state_response_handler(
             MessageType::SyncRequest,
             &bincode::serialize(&sysnc_request).map_err(|e| e.to_string())?,
         ).await?;
-    } else {
-        println!("当前状态同主节点一致");
-
-        pbft_write.step = Step::Ok;
     }
 
     Ok(())
