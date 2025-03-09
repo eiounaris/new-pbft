@@ -3,3 +3,5 @@
 /state
 
 .env
+
+config/variable_config.json
