@@ -5,5 +5,3 @@
 /state-db
 
 .env
-
-config/variable_config.json

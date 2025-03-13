@@ -1,3 +1,35 @@
+docker pull debain
+
 docker build -t pbft-image:latest .
+
 docker volume create pbft_data
-docker run --restart unless-stopped --name pbft-node -p 8888:8888 --env-file .env -v $(pwd)/config:/app/config -v $(pwd)/pem:/app/pem -v pbft_data:/data pbft-image:latest
+
+docker run -d \
+  --restart unless-stopped \
+  --name pbft-node \
+  --network=host \
+  --env-file .env \
+  -v $(pwd)/config:/app/config \
+  -v $(pwd)/pem:/app/pem \
+  -v pbft_data:/data \
+  pbft-image:latest
+  
+// ---
+or
+// ---
+
+# 创建支持多播的自定义网络
+docker network create \
+  --driver=bridge \
+  --subnet=192.168.100.0/24 \
+  --opt com.docker.network.bridge.enable_mcast=true \
+  pbft-net
+
+# 运行容器时指定网络
+docker run -d \
+  --network=pbft-net \
+  --name pbft-node \
+  -p 8888:8888 \
+  --env-file .env \
+  -v pbft_data:/data \
+  pbft-image:latest

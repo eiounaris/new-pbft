@@ -3,7 +3,7 @@ FROM debian
 
 # 设置工作目录并创建必要目录
 WORKDIR /app
-RUN mkdir -p /state
+RUN mkdir -p /data
 
 # 复制可执行文件并设置权限
 COPY new_pbft .
