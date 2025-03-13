@@ -45,6 +45,11 @@ pub struct ConstantConfig {
     pub multi_cast_port: u64,
     pub block_size: u64,
     pub variable_config_path: String,
+    pub heartbeat_timeout: u64,
+    pub view_change_timeout: u64,
+    pub state_sync_timeout: u64,
+    pub concensus_timeout: u64,
+    pub max_transmit_block: u64,
 }
 impl ConstantConfig {
     /// 从文件加载持久配置

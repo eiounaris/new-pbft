@@ -4,5 +4,10 @@
     "multi_cast_ip": "224.0.0.88",
     "multi_cast_port": 8888,
     "block_size": 50,
-    "variable_config_path": "config/variable_config.json"
+    "variable_config_path": "config/variable_config.json",
+    "heartbeat_timeout": 1000,
+    "view_change_timeout": 2000,
+    "state_sync_timeout": 1000,
+    "concensus_timeout": 1000,
+    "max_transmit_block": 100
 }

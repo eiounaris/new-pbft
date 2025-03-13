@@ -149,7 +149,7 @@ pub async fn view_request (
         &Vec::new()
     ).await?;
 
-    sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后检查状态
+    sleep(Duration::from_millis(constant_config.state_sync_timeout)).await; // 间隔之后检查状态
 
     let mut pbft_write = pbft.write().await;
 
@@ -185,7 +185,7 @@ pub async fn heartbeat(
     pbft: Arc<RwLock<Pbft>>,
 ) -> Result<(), String> {
 
-    let mut interval = interval(Duration::from_secs(1)); // 硬编码心跳间隔
+    let mut interval = interval(Duration::from_millis(constant_config.heartbeat_timeout)); // 心跳间隔
     interval.reset(); // 确保 interval 不会立即执行
 
     loop {
@@ -239,7 +239,7 @@ pub async fn view_change(
     mut reset_receiver: mpsc::Receiver<()>,
 ) -> Result<(), String> {
 
-    let mut interval = tokio::time::interval(Duration::from_secs(2)); // 硬编码视图切换时间
+    let mut interval = tokio::time::interval(Duration::from_millis(constant_config.view_change_timeout)); // 视图切换时间
     interval.reset(); // 确保 interval 不会立即执行
 
     loop {
@@ -264,7 +264,7 @@ pub async fn view_change(
 
                     drop(pbft_write);
 
-                    let num: u64 = rand::random::<u64>() % 1000; // 生成 0 到 500 之间的随机整数
+                    let num: u64 = rand::random::<u64>() % (constant_config.view_change_timeout - constant_config.concensus_timeout); // 生成随机整数
                     sleep(Duration::from_millis(num)).await;
 
                     let mut pbft_write = pbft.write().await;

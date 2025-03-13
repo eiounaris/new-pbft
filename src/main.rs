@@ -43,7 +43,6 @@ async fn main() -> Result<(), String> {
                 let client = client.clone();
                 let pbft = pbft.clone();
                 async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await; // 硬编码，一秒之后获取视图编号
                     if let Err(e) = new_pbft::view_request(
                         constant_config, 
                         client,
@@ -62,7 +61,7 @@ async fn main() -> Result<(), String> {
                 let client = client.clone();
                 let pbft = pbft.clone();
                 async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
+                    tokio::time::sleep(tokio::time::Duration::from_millis(constant_config.state_sync_timeout)).await; // 等待状态稳定
                     if let Err(e) = new_pbft::heartbeat(
                         constant_config, 
                         client, 
@@ -82,7 +81,7 @@ async fn main() -> Result<(), String> {
                 let client = client.clone();
                 let pbft = pbft.clone();
                 async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
+                    tokio::time::sleep(tokio::time::Duration::from_millis(constant_config.state_sync_timeout)).await; // 等待状态稳定
                     if let Err(e) = new_pbft::view_change(
                         constant_config, 
                         client, 
@@ -103,7 +102,7 @@ async fn main() -> Result<(), String> {
                 let client = client.clone();
                 let state = state.clone();
                 async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
+                    tokio::time::sleep(tokio::time::Duration::from_millis(constant_config.state_sync_timeout)).await; // 等待状态稳定
                     if let Err(e) = new_pbft::send_message(
                         constant_config, 
                         client, 
@@ -121,7 +120,7 @@ async fn main() -> Result<(), String> {
             //     let client = client.clone();
             //     let state = state.clone();
             //     async move {
-            //         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await; // 硬编码，等待状态稳定
+            //         tokio::time::sleep(tokio::time::Duration::from_millis(constant_config.state_sync_timeout)).await; // 等待状态稳定
             //         if let Err(e) = new_pbft::restapi::actix_web_runweb_run(
             //             constant_config, 
             //             client, 
