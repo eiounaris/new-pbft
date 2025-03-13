@@ -155,7 +155,11 @@ pub async fn view_request (
 
     if pbft_write.step == Step::ReceivingViewResponse
     {
-        println!("未发现主节点");
+        if client.is_primarry(pbft_write.view_number) {
+            println!("未发现新主节点，继续担任主节点");
+        } else {
+            println!("未发现主节点，准备切换视图");
+        }
 
         pbft_write.step = Step::Ok
     }
