@@ -154,10 +154,8 @@ pub async fn view_request (
     let mut pbft_write = pbft.write().await;
 
     if pbft_write.step == Step::ReceivingViewResponse
-        || pbft_write.step == Step::ReceivingStateResponse
-        || pbft_write.step == Step::ReceivingSyncResponse
     {
-        println!("初始状态为：{:?}，区块链同步可能存在异常", pbft_write.step);
+        println!("未发现主节点");
 
         pbft_write.step = Step::Ok
     }
@@ -269,7 +267,7 @@ pub async fn view_change(
 
                     let mut pbft_write = pbft.write().await;
 
-                    if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
+                    if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > constant_config.concensus_timeout) {
                         pbft_write.step = Step::NoPrimary;
                     }
 

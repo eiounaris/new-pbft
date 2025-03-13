@@ -203,7 +203,7 @@ pub async fn request_handler(
         }
 
         if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
-            && (get_current_timestamp().unwrap() - pbft_write.start_time > 1)
+            && (get_current_timestamp().unwrap() - pbft_write.start_time > constant_config.concensus_timeout)
         {
             pbft_write.step = Step::Ok;
         }
@@ -273,7 +273,7 @@ pub async fn preprepare_handler(
     let mut pbft_write = pbft.write().await;
 
     if (pbft_write.step == Step::ReceivingPrepare || pbft_write.step == Step::ReceiveingCommit)
-        && (get_current_timestamp().unwrap() - pbft_write.start_time > 1)
+        && (get_current_timestamp().unwrap() - pbft_write.start_time > constant_config.concensus_timeout)
     {
         pbft_write.step = Step::Ok;
     }
@@ -521,12 +521,11 @@ pub async fn view_change_handler(
              &Vec::new()
         ).await?;
 
-        sleep(Duration::from_secs(1)).await; // 硬编码，一秒之后切换状态为 Ok 或 ViewChange
+        sleep(Duration::from_millis(constant_config.state_sync_timeout)).await; // 间隔之后切换状态为 Ok 或 ViewChange
 
         let mut pbft_write = pbft.write().await;
 
-        if pbft_write.step == Step::ReceivingViewResponse
-            || pbft_write.step == Step::ReceivingStateResponse
+        if pbft_write.step == Step::ReceivingStateResponse
             || pbft_write.step == Step::ReceivingSyncResponse
         {
             println!("当前状态为：{:?}，区块链同步可能存在异常", pbft_write.step);
@@ -560,7 +559,7 @@ pub async fn new_view_handler(
         return Ok(())
     }
 
-    if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > 1) {
+    if pbft_write.step == Step::ReceivingViewChange && (get_current_timestamp().unwrap() - pbft_write.start_time > constant_config.concensus_timeout) {
         pbft_write.step = Step::NoPrimary;
     }
 

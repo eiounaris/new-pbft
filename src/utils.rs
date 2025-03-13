@@ -7,13 +7,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 // ---
 
-/// 加载时间戳（s）
+/// 加载时间戳（ms）
 pub fn get_current_timestamp() -> Result<u64, String> {
     let start = SystemTime::now();
     let since_epoch = start
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?;
-    Ok(since_epoch.as_secs())
+    Ok(since_epoch.as_millis() as u64)
 }
 
 // ---
