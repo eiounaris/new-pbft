@@ -412,11 +412,12 @@ pub async fn send_message(
             
             if let Some(begin_block) = state.read().await.rocksdb.get_block_by_index(old_index + 1)? {
                 println!("begin_index: {}, end_index: {}", begin_block.index, end_block.index);
-                println!("begin_timestamp: {}, end_timestamp: {}", begin_block.timestamp, end_block.timestamp);
+                println!("begin_timestamp: {}(ms), end_timestamp: {}(ms)", begin_block.timestamp, end_block.timestamp);
                 println!("blocksize: {}", constant_config.block_size);
-                println!("tps = {}", (
-                    end_block.index - begin_block.index) as f64  
+                println!("tps = {}", 
+                (end_block.index - begin_block.index) as f64  
                     * end_block.transactions.len() as f64 
+                    * 1000.0
                     / (end_block.timestamp - begin_block.timestamp + 1) as f64
                 );
             } else {

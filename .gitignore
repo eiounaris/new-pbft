@@ -1,7 +1,5 @@
 /target
 
-/state
-
-/state-db
+/data
 
 .env

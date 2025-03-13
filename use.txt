@@ -13,7 +13,7 @@ docker run -d \
   -v $(pwd)/pem:/app/pem \
   -v pbft_data:/data \
   pbft-image:latest
-  
+
 // ---
 or
 // ---
@@ -21,15 +21,18 @@ or
 # 创建支持多播的自定义网络
 docker network create \
   --driver=bridge \
-  --subnet=192.168.100.0/24 \
+  --subnet=192.168.228.0/24 \
   --opt com.docker.network.bridge.enable_mcast=true \
   pbft-net
 
 # 运行容器时指定网络
 docker run -d \
+  --restart unless-stopped \
   --network=pbft-net \
   --name pbft-node \
   -p 8888:8888 \
   --env-file .env \
+  -v $(pwd)/config:/app/config \
+  -v $(pwd)/pem:/app/pem \
   -v pbft_data:/data \
   pbft-image:latest
