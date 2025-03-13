@@ -10,7 +10,7 @@ COPY new_pbft .
 RUN chmod +x /app/new_pbft
 
 # 声明数据卷和端口
-# VOLUME ["/data"]
+VOLUME ["/data"]
 EXPOSE 8888
 
 # 入口点配置
